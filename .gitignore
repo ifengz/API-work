@@ -4,8 +4,9 @@ __pycache__/
 .venv/
 *.pyc
 data/
+build-info.json
+scripts/deploy-production.env
 credentials/*.json
 config/gateway.json
 config/litellm.generated.yaml
 config/vertex-pool.json
-
