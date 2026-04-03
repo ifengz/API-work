@@ -9,6 +9,16 @@ def yaml_quote(value: str) -> str:
     return value.replace(":", "\\:")
 
 
+def resolve_scalar(deployment: dict[str, object], literal_key: str, env_key: str) -> str:
+    literal_value = str(deployment.get(literal_key, "")).strip()
+    if literal_value:
+        return literal_value
+    env_value = str(deployment.get(env_key, "")).strip()
+    if env_value:
+        return f"os.environ/{env_value}"
+    raise KeyError(f"missing {literal_key} or {env_key}")
+
+
 def render_litellm_yaml(config: dict[str, object]) -> str:
     lines: list[str] = ["model_list:"]
     deployments = config.get("deployments", [])
@@ -18,8 +28,8 @@ def render_litellm_yaml(config: dict[str, object]) -> str:
                 f"  - model_name: {deployment['alias']}",
                 "    litellm_params:",
                 f"      model: {deployment['provider_model']}",
-                f"      vertex_project: os.environ/{deployment['project_env']}",
-                f"      vertex_location: os.environ/{deployment['location_env']}",
+                f"      vertex_project: {resolve_scalar(deployment, 'project_id', 'project_env')}",
+                f"      vertex_location: {resolve_scalar(deployment, 'location', 'location_env')}",
                 f"      vertex_credentials: {deployment['credentials_file']}",
                 f"      rpm: {int(deployment.get('rpm', 60))}",
             ]
@@ -74,4 +84,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

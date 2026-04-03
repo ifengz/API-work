@@ -18,18 +18,6 @@
     }
   },
   "model_routes": {
-    "vertex-gemini-flash": {
-      "upstream": "litellm",
-      "upstream_model": "vertex-gemini-flash"
-    },
-    "vertex-gemini-pro": {
-      "upstream": "litellm",
-      "upstream_model": "vertex-gemini-pro"
-    },
-    "vertex-imagen-3": {
-      "upstream": "litellm",
-      "upstream_model": "vertex-imagen-3"
-    },
     "gpt-4o-mini": {
       "upstream": "one_api",
       "upstream_model": "gpt-4o-mini"
@@ -64,15 +52,15 @@
       "site_token": "site-demo-a",
       "name": "demo-a",
       "allowed_models": [
-        "vertex-gemini-flash",
-        "vertex-gemini-pro",
-        "vertex-imagen-3",
+        "gemini-2.5-flash",
+        "gemini-2.5-pro",
+        "gemini-2.5-flash-image",
         "gpt-4o-mini",
         "claude-3-7-sonnet",
         "deepseek-chat"
       ],
       "default_chat_model": "gpt-4o-mini",
-      "default_image_model": "vertex-imagen-3",
+      "default_image_model": "gemini-2.5-flash-image",
       "extra_headers": {
         "X-Site-Group": "demo-a"
       }
@@ -81,14 +69,20 @@
       "site_token": "site-demo-b",
       "name": "demo-b",
       "allowed_models": [
-        "vertex-gemini-flash",
-        "vertex-imagen-3",
+        "gemini-3-flash-preview",
+        "gemini-3.1-pro-preview",
+        "gemini-3.1-flash-image-preview",
+        "gemini-3.1-flash-lite-preview",
+        "gemini-2.5-flash",
+        "gemini-2.5-pro",
+        "gemini-2.5-flash-image",
+        "gemini-flash-latest",
         "qwen-max",
         "glm-4.5",
         "moonshot-v1-32k"
       ],
-      "default_chat_model": "vertex-gemini-flash",
-      "default_image_model": "vertex-imagen-3",
+      "default_chat_model": "gemini-2.5-flash",
+      "default_image_model": "gemini-2.5-flash-image",
       "extra_headers": {
         "X-Site-Group": "demo-b"
       }

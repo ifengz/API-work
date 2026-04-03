@@ -29,10 +29,6 @@ CONFIG_TEMPLATE = {
         }
     },
     "model_routes": {
-        "vertex-gemini-flash": {
-            "upstream": "litellm",
-            "upstream_model": "vertex-gemini-flash"
-        },
         "gpt-4o-mini": {
             "upstream": "one_api",
             "upstream_model": "gpt-4o-mini"
@@ -43,12 +39,12 @@ CONFIG_TEMPLATE = {
             "site_token": "site-demo-a",
             "name": "demo-a",
             "allowed_models": [
-                "vertex-gemini-flash",
+                "gemini-2.5-flash",
                 "gpt-4o-mini",
-                "vertex-imagen-3"
+                "gemini-2.5-flash-image"
             ],
             "default_chat_model": "gpt-4o-mini",
-            "default_image_model": "vertex-imagen-3",
+            "default_image_model": "gemini-2.5-flash-image",
             "extra_headers": {
                 "X-Forwarded-Site": "demo-a"
             }
@@ -57,12 +53,12 @@ CONFIG_TEMPLATE = {
             "site_token": "site-demo-b",
             "name": "demo-b",
             "allowed_models": [
-                "vertex-gemini-flash",
-                "vertex-imagen-3",
+                "gemini-2.5-flash",
+                "gemini-2.5-flash-image",
                 "qwen-max"
             ],
-            "default_chat_model": "vertex-gemini-flash",
-            "default_image_model": "vertex-imagen-3",
+            "default_chat_model": "gemini-2.5-flash",
+            "default_image_model": "gemini-2.5-flash-image",
             "extra_headers": {
                 "X-Forwarded-Site": "demo-b"
             }
@@ -88,7 +84,7 @@ class SiteGatewayTests(unittest.TestCase):
         self.temp_dir.cleanup()
 
     def test_vertex_models_default_to_litellm(self) -> None:
-        decision = self.policy.resolve("site-demo-a", "vertex-gemini-flash", "chat")
+        decision = self.policy.resolve("site-demo-a", "gemini-2.5-flash", "chat")
         self.assertEqual(decision.upstream_name, "litellm")
 
     def test_default_model_used_when_request_model_missing(self) -> None:
@@ -102,12 +98,12 @@ class SiteGatewayTests(unittest.TestCase):
 
     def test_image_requests_use_default_image_model(self) -> None:
         decision = self.policy.resolve("site-demo-a", None, "images")
-        self.assertEqual(decision.request_model, "vertex-imagen-3")
+        self.assertEqual(decision.request_model, "gemini-2.5-flash-image")
         self.assertEqual(decision.upstream_name, "litellm")
 
     def test_demo_b_default_image_model_is_allowed(self) -> None:
         decision = self.policy.resolve("site-demo-b", None, "images")
-        self.assertEqual(decision.request_model, "vertex-imagen-3")
+        self.assertEqual(decision.request_model, "gemini-2.5-flash-image")
         self.assertEqual(decision.upstream_name, "litellm")
 
     def test_upstream_request_overrides_model_and_preserves_headers(self) -> None:

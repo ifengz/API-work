@@ -93,3 +93,11 @@ LiteLLM = Vertex / Gemini 执行层
 - [x] 阶段 4: 执行层实施拆解
 - [x] 阶段 5: 多站点规则拆解
 - [x] 阶段 6: 全局复核
+
+## 2026-04-04 临时收口
+
+| 目标 | 文件 | 动作 | 验证 | 完成标准 |
+| --- | --- | --- | --- | --- |
+| Vertex 主执行回切 LiteLLM | `scripts/build_litellm_config.py` | 支持 deployment 直接写 `project_id / location`，不再强依赖 `PRIMARY / SECONDARY env` | `tests/test_build_litellm_config.py` 通过 | 多项目多 JSON 能直接生成 LiteLLM YAML |
+| 批量吃 `vertex/` 目录 | `scripts/build_vertex_pool_from_dir.py` | 扫描、去重、复制 JSON、生成 `config/vertex-pool.json` | `tests/test_vertex_pool_builder.py` 通过 | 用户只给目录就能生成池配置 |
+| 默认模型切到用户指定清单 | `config/*.json`, `README.md` | 把 Gemini 3/3.1/2.5/2.0 清单写成默认导入模型 | 自检 + 文档核对 | 新生成配置默认就是这批模型 |

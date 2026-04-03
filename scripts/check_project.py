@@ -13,6 +13,7 @@ REQUIRED_FILES = [
     "docker-compose.yml",
     "scripts/deploy-production.sh",
     "scripts/deploy-production.env.example",
+    "scripts/build_vertex_pool_from_dir.py",
     "scripts/import_vertex_channels.py",
     "src/site_gateway/server.py",
     "src/site_gateway/policy.py",
@@ -20,8 +21,10 @@ REQUIRED_FILES = [
     "config/litellm.example.yaml",
     "config/vertex-pool.example.json",
     "scripts/build_litellm_config.py",
+    "tests/test_build_litellm_config.py",
     "tests/test_site_gateway.py",
     "tests/test_vertex_import.py",
+    "tests/test_vertex_pool_builder.py",
 ]
 
 

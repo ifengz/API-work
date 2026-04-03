@@ -16,7 +16,13 @@ BRANCH="${BRANCH:-main}"
 GIT_REMOTE="${GIT_REMOTE:-origin}"
 DOCKER_COMPOSE_FILE="${DOCKER_COMPOSE_FILE:-docker-compose.yml}"
 ENV_FILE="${ENV_FILE:-.env}"
+VERTEX_SOURCE_DIR="${VERTEX_SOURCE_DIR:-vertex}"
 VERTEX_POOL_FILE="${VERTEX_POOL_FILE:-config/vertex-pool.json}"
+VERTEX_CREDENTIALS_DIR="${VERTEX_CREDENTIALS_DIR:-credentials/imported}"
+VERTEX_PROJECTS="${VERTEX_PROJECTS:-}"
+VERTEX_MAX_PER_PROJECT="${VERTEX_MAX_PER_PROJECT:-}"
+VERTEX_LOCATION="${VERTEX_LOCATION:-global}"
+VERTEX_MODELS="${VERTEX_MODELS:-}"
 LITELLM_OUTPUT_FILE="${LITELLM_OUTPUT_FILE:-config/litellm.generated.yaml}"
 HEALTHCHECK_URL="${HEALTHCHECK_URL:-http://127.0.0.1:8080/healthz}"
 PUBLIC_URL="${PUBLIC_URL:-}"
@@ -115,11 +121,29 @@ main() {
     exit 1
   fi
 
-  if [[ ! -f "$VERTEX_POOL_FILE" ]]; then
-    echo "[deploy] 缺少 Vertex 凭证池文件: $VERTEX_POOL_FILE" >&2
+  if [[ ! -d "$VERTEX_SOURCE_DIR" ]]; then
+    echo "[deploy] 缺少 Vertex JSON 目录: $VERTEX_SOURCE_DIR" >&2
     exit 1
   fi
 
+  local build_vertex_args=(
+    scripts/build_vertex_pool_from_dir.py
+    --vertex-dir "$VERTEX_SOURCE_DIR"
+    --output-config "$VERTEX_POOL_FILE"
+    --output-credentials-dir "$VERTEX_CREDENTIALS_DIR"
+    --location "$VERTEX_LOCATION"
+  )
+  if [[ -n "$VERTEX_PROJECTS" ]]; then
+    build_vertex_args+=(--projects "$VERTEX_PROJECTS")
+  fi
+  if [[ -n "$VERTEX_MAX_PER_PROJECT" ]]; then
+    build_vertex_args+=(--max-per-project "$VERTEX_MAX_PER_PROJECT")
+  fi
+  if [[ -n "$VERTEX_MODELS" ]]; then
+    build_vertex_args+=(--models "$VERTEX_MODELS")
+  fi
+
+  run "$PYTHON_BIN" "${build_vertex_args[@]}"
   run "$PYTHON_BIN" scripts/build_litellm_config.py --input "$VERTEX_POOL_FILE" --output "$LITELLM_OUTPUT_FILE"
   run "$PYTHON_BIN" scripts/check_project.py
 

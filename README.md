@@ -1,11 +1,11 @@
 # AI Gateway Skeleton
 
-这套骨架直接按你已经拍板的路线落地：
+这套骨架现在按这条线落地：
 
 ```text
 site-gateway -> one-api / LiteLLM
 one-api      -> 主面板 + 统一入口
-LiteLLM      -> Vertex / Gemini 执行层
+LiteLLM      -> Vertex 主执行层
 ```
 
 ## 最短落地步骤
@@ -16,17 +16,24 @@ LiteLLM      -> Vertex / Gemini 执行层
 cp .env.example .env
 ```
 
-2. 准备运行时配置。
+2. 用 `vertex/` 目录生成运行时 Vertex 配置。
 
 ```bash
 cp config/gateway.example.json config/gateway.json
-cp config/vertex-pool.example.json config/vertex-pool.json
+python3 scripts/build_vertex_pool_from_dir.py \
+  --vertex-dir vertex \
+  --output-config config/vertex-pool.json \
+  --output-credentials-dir credentials/imported
 python3 scripts/build_litellm_config.py \
   --input config/vertex-pool.json \
   --output config/litellm.generated.yaml
 ```
 
-默认示例只启用 `vertex-primary.json`。要上双池负载均衡时，再手动补 `vertex-secondary.json` 和第二组 deployment。
+这一步会做 3 件事：
+
+- 扫描 `vertex/` 目录里的所有服务账号 JSON
+- 按 `project_id + client_email` 去重
+- 复制有效 JSON 到 `credentials/imported/`，并生成 `config/vertex-pool.json`
 
 3. 做本地自检。
 
@@ -44,14 +51,15 @@ docker compose up --build
 ## 宝塔 webhook 部署
 
 1. 服务器克隆仓库到固定目录，比如 `/www/wwwroot/API-work`。
-2. 复制模板：
+2. 复制模板，确保服务器上的 `vertex/` 目录已经放好服务账号 JSON：
 
 ```bash
 cp scripts/deploy-production.env.example scripts/deploy-production.env
 cp .env.example .env
 cp config/gateway.example.json config/gateway.json
-cp config/vertex-pool.example.json config/vertex-pool.json
 ```
+
+正式部署脚本会自动扫描 `vertex/`，生成 `config/vertex-pool.json` 和 `config/litellm.generated.yaml`。
 
 3. 先在服务器本地预演：
 
@@ -77,7 +85,7 @@ bash /www/wwwroot/API-work/scripts/deploy-production.sh
 
 ## Vertex 批量导入
 
-如果你决定把 `VertexAI` 直接配到 `One-API` 面板，而不是继续走 `LiteLLM` 的 `vertex-pool.json`，可以用这个项目自带的批量导入脚本。
+如果你决定把 `Vertex` 主执行放回 `LiteLLM`，这套项目现在推荐直接用 `vertex/` 目录生成池配置，不再走 `One-API` 面板逐条建 `VertexAI` 渠道。
 
 默认模型清单已经固定为：
 
@@ -96,56 +104,38 @@ bash /www/wwwroot/API-work/scripts/deploy-production.sh
 - `gemini-2.0-flash`
 - `gemini-2.0-flash-lite`
 
-脚本会按 `project_id + client_email` 去重，也就是：
+生成脚本会按 `project_id + client_email` 去重，也就是：
 
 - 同一服务账号导出的重复 JSON 只保留一份
-- 同一项目下不同服务账号会各建一条渠道
+- 同一项目下不同服务账号会各生成一条 LiteLLM deployment
 - 默认 `Region` 用 `global`
 
-先看计划导入什么：
+先看计划会吃到哪些 JSON：
 
 ```bash
-python3 scripts/import_vertex_channels.py \
-  --server http://api-work.usfan.net:5000 \
+python3 scripts/build_vertex_pool_from_dir.py \
   --vertex-dir vertex \
-  --group default \
-  --name-prefix vertex \
-  --dry-run
+  --output-config config/vertex-pool.json \
+  --output-credentials-dir credentials/imported \
+  --max-per-project 2
 ```
 
-真正导入并测试：
+再生成 LiteLLM YAML：
 
 ```bash
-python3 scripts/import_vertex_channels.py \
-  --server http://api-work.usfan.net:5000 \
-  --vertex-dir vertex \
-  --group default \
-  --name-prefix vertex \
-  --access-token YOUR_ONE_API_ADMIN_ACCESS_TOKEN
+python3 scripts/build_litellm_config.py \
+  --input config/vertex-pool.json \
+  --output config/litellm.generated.yaml
 ```
 
-如果你只想先测每个项目前 2 条：
+如果你只想先吃指定项目：
 
 ```bash
-python3 scripts/import_vertex_channels.py \
-  --server http://api-work.usfan.net:5000 \
+python3 scripts/build_vertex_pool_from_dir.py \
   --vertex-dir vertex \
-  --group default \
-  --name-prefix vertex \
-  --max-per-project 2 \
-  --access-token YOUR_ONE_API_ADMIN_ACCESS_TOKEN
-```
-
-如果你不用管理 token，也可以传管理员用户名密码：
-
-```bash
-python3 scripts/import_vertex_channels.py \
-  --server http://api-work.usfan.net:5000 \
-  --vertex-dir vertex \
-  --group default \
-  --name-prefix vertex \
-  --username root \
-  --password 'your-password'
+  --projects nodal-rex-492217-r2,newwoo1 \
+  --output-config config/vertex-pool.json \
+  --output-credentials-dir credentials/imported
 ```
 
 ## 目录
