@@ -27,3 +27,22 @@
   - `python3 scripts/build_litellm_config.py --input config/vertex-pool.json --output config/litellm.generated.yaml`
   - `python3 -m compileall src scripts`
 - 当前环境没有 `docker` 命令，Docker 实机启动无法在这里验证
+
+## 2026-04-04
+
+### 01:00 - 02:00
+- 核实 `One-API` 渠道接口：
+  - 创建渠道：`POST /api/channel/`
+  - 测试渠道：`GET /api/channel/test/:id?model=...`
+  - 登录：`POST /api/user/login`
+- 扫描本仓库 `vertex/` 目录，确认共有 `56` 份 JSON，按 `project_id + client_email` 去重后是 `28` 条有效服务账号
+- 新增 `scripts/import_vertex_channels.py`，支持：
+  - 按 `project_id + client_email` 去重
+  - 指定默认 Vertex 模型清单
+  - 批量创建 `VertexAI` 渠道
+  - 创建后自动跑连通测试
+- 新增 `tests/test_vertex_import.py`
+- 用真实线上 `One-API` 跑样本导入：
+  - 已成功创建 `vertex-nodal-rex-492217-r2-01` 渠道
+  - 测试 `gemini-2.5-flash` 时返回 `adaptor not found`
+  - 说明当前线上 `One-API v0.6.11-preview.7` 的后端 Vertex adaptor 没真正可用，不能继续盲目批量导

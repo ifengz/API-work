@@ -75,6 +75,79 @@ bash /www/wwwroot/API-work/scripts/deploy-production.sh
 | site-gateway 健康检查 | `http://api-work.usfan.net:8080/healthz` |
 | LiteLLM | `http://api-work.usfan.net:4000` |
 
+## Vertex 批量导入
+
+如果你决定把 `VertexAI` 直接配到 `One-API` 面板，而不是继续走 `LiteLLM` 的 `vertex-pool.json`，可以用这个项目自带的批量导入脚本。
+
+默认模型清单已经固定为：
+
+- `gemini-3-flash-preview`
+- `gemini-3.1-pro-preview`
+- `gemini-3.1-flash-image-preview`
+- `gemini-3-pro-image-preview`
+- `gemini-3.1-flash-lite-preview`
+- `gemini-2.5-flash-image`
+- `gemini-2.5-pro`
+- `gemini-pro-latest`
+- `gemini-flash-latest`
+- `gemini-flash-lite-latest`
+- `gemini-2.5-flash`
+- `gemini-2.5-flash-lite`
+- `gemini-2.0-flash`
+- `gemini-2.0-flash-lite`
+
+脚本会按 `project_id + client_email` 去重，也就是：
+
+- 同一服务账号导出的重复 JSON 只保留一份
+- 同一项目下不同服务账号会各建一条渠道
+- 默认 `Region` 用 `global`
+
+先看计划导入什么：
+
+```bash
+python3 scripts/import_vertex_channels.py \
+  --server http://api-work.usfan.net:5000 \
+  --vertex-dir vertex \
+  --group default \
+  --name-prefix vertex \
+  --dry-run
+```
+
+真正导入并测试：
+
+```bash
+python3 scripts/import_vertex_channels.py \
+  --server http://api-work.usfan.net:5000 \
+  --vertex-dir vertex \
+  --group default \
+  --name-prefix vertex \
+  --access-token YOUR_ONE_API_ADMIN_ACCESS_TOKEN
+```
+
+如果你只想先测每个项目前 2 条：
+
+```bash
+python3 scripts/import_vertex_channels.py \
+  --server http://api-work.usfan.net:5000 \
+  --vertex-dir vertex \
+  --group default \
+  --name-prefix vertex \
+  --max-per-project 2 \
+  --access-token YOUR_ONE_API_ADMIN_ACCESS_TOKEN
+```
+
+如果你不用管理 token，也可以传管理员用户名密码：
+
+```bash
+python3 scripts/import_vertex_channels.py \
+  --server http://api-work.usfan.net:5000 \
+  --vertex-dir vertex \
+  --group default \
+  --name-prefix vertex \
+  --username root \
+  --password 'your-password'
+```
+
 ## 目录
 
 | 路径 | 作用 |
