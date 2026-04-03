@@ -52,6 +52,20 @@ CONFIG_TEMPLATE = {
             "extra_headers": {
                 "X-Forwarded-Site": "demo-a"
             }
+        },
+        {
+            "site_token": "site-demo-b",
+            "name": "demo-b",
+            "allowed_models": [
+                "vertex-gemini-flash",
+                "vertex-imagen-3",
+                "qwen-max"
+            ],
+            "default_chat_model": "vertex-gemini-flash",
+            "default_image_model": "vertex-imagen-3",
+            "extra_headers": {
+                "X-Forwarded-Site": "demo-b"
+            }
         }
     ]
 }
@@ -88,6 +102,11 @@ class SiteGatewayTests(unittest.TestCase):
 
     def test_image_requests_use_default_image_model(self) -> None:
         decision = self.policy.resolve("site-demo-a", None, "images")
+        self.assertEqual(decision.request_model, "vertex-imagen-3")
+        self.assertEqual(decision.upstream_name, "litellm")
+
+    def test_demo_b_default_image_model_is_allowed(self) -> None:
+        decision = self.policy.resolve("site-demo-b", None, "images")
         self.assertEqual(decision.request_model, "vertex-imagen-3")
         self.assertEqual(decision.upstream_name, "litellm")
 
