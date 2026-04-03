@@ -67,6 +67,14 @@ bash /www/wwwroot/API-work/scripts/deploy-production.sh
 
 5. GitHub webhook 只监听 `main` 的 `push`，指向宝塔 webhook 地址。
 
+## 当前访问入口
+
+| 服务 | 默认外部入口 |
+| --- | --- |
+| one-api 面板 | `http://api-work.usfan.net:5000` |
+| site-gateway 健康检查 | `http://api-work.usfan.net:8080/healthz` |
+| LiteLLM | `http://api-work.usfan.net:4000` |
+
 ## 目录
 
 | 路径 | 作用 |
