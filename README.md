@@ -39,6 +39,32 @@ python3 -m unittest discover -s tests
 docker compose up --build
 ```
 
+## 宝塔 webhook 部署
+
+1. 服务器克隆仓库到固定目录，比如 `/www/wwwroot/API-work`。
+2. 复制模板：
+
+```bash
+cp scripts/deploy-production.env.example scripts/deploy-production.env
+cp .env.example .env
+cp config/gateway.example.json config/gateway.json
+cp config/vertex-pool.example.json config/vertex-pool.json
+```
+
+3. 先在服务器本地预演：
+
+```bash
+DRY_RUN=1 ALLOW_DIRTY=1 bash scripts/deploy-production.sh
+```
+
+4. 宝塔 webhook / 钩子执行命令：
+
+```bash
+bash /www/wwwroot/API-work/scripts/deploy-production.sh
+```
+
+5. GitHub webhook 只监听 `main` 的 `push`，指向宝塔 webhook 地址。
+
 ## 目录
 
 | 路径 | 作用 |
@@ -66,4 +92,3 @@ docker compose up --build
 ## 当前边界
 
 这次只做 AI Gateway 本体，不把其他业务系统混进来。
-

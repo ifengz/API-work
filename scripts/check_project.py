@@ -11,6 +11,8 @@ REQUIRED_FILES = [
     "README.md",
     "Dockerfile",
     "docker-compose.yml",
+    "scripts/deploy-production.sh",
+    "scripts/deploy-production.env.example",
     "src/site_gateway/server.py",
     "src/site_gateway/policy.py",
     "config/gateway.example.json",
