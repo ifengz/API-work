@@ -1,0 +1,55 @@
+services:
+  site-gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: site-gateway
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      SITE_GATEWAY_CONFIG: /app/config/gateway.json
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./config/gateway.json:/app/config/gateway.json:ro
+    depends_on:
+      - one-api
+      - litellm
+
+  one-api:
+    image: ghcr.io/songquanpeng/one-api:latest
+    container_name: one-api
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      TZ: ${TZ}
+      SQL_DSN: sqlite:///data/one-api.db
+      SESSION_SECRET: ${ONE_API_SESSION_SECRET}
+      INITIAL_ROOT_TOKEN: ${ONE_API_ROOT_TOKEN}
+      INITIAL_ROOT_ACCESS_TOKEN: ${ONE_API_ROOT_ACCESS_TOKEN}
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./data/one-api:/data
+
+  litellm:
+    image: docker.litellm.ai/berriai/litellm:main-latest
+    container_name: litellm
+    restart: unless-stopped
+    env_file:
+      - .env
+    command:
+      - "--config"
+      - "/app/config.yaml"
+      - "--port"
+      - "4000"
+      - "--num_workers"
+      - "1"
+    ports:
+      - "4000:4000"
+    volumes:
+      - ./config/litellm.generated.yaml:/app/config.yaml:ro
+      - ./credentials:/app/credentials:ro
+

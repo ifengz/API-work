@@ -1,0 +1,97 @@
+{
+  "listen_host": "0.0.0.0",
+  "listen_port": 8080,
+  "upstreams": {
+    "one_api": {
+      "base_url": "http://one-api:3000",
+      "api_key_env": "ONE_API_MASTER_TOKEN",
+      "timeout_seconds": 120,
+      "chat_path": "/v1/chat/completions",
+      "image_path": "/v1/images/generations"
+    },
+    "litellm": {
+      "base_url": "http://litellm:4000",
+      "api_key_env": "LITELLM_MASTER_KEY",
+      "timeout_seconds": 120,
+      "chat_path": "/v1/chat/completions",
+      "image_path": "/v1/images/generations"
+    }
+  },
+  "model_routes": {
+    "vertex-gemini-flash": {
+      "upstream": "litellm",
+      "upstream_model": "vertex-gemini-flash"
+    },
+    "vertex-gemini-pro": {
+      "upstream": "litellm",
+      "upstream_model": "vertex-gemini-pro"
+    },
+    "vertex-imagen-3": {
+      "upstream": "litellm",
+      "upstream_model": "vertex-imagen-3"
+    },
+    "gpt-4o-mini": {
+      "upstream": "one_api",
+      "upstream_model": "gpt-4o-mini"
+    },
+    "claude-3-7-sonnet": {
+      "upstream": "one_api",
+      "upstream_model": "claude-3-7-sonnet"
+    },
+    "deepseek-chat": {
+      "upstream": "one_api",
+      "upstream_model": "deepseek-chat"
+    },
+    "qwen-max": {
+      "upstream": "one_api",
+      "upstream_model": "qwen-max"
+    },
+    "glm-4.5": {
+      "upstream": "one_api",
+      "upstream_model": "glm-4.5"
+    },
+    "minimax-text-01": {
+      "upstream": "one_api",
+      "upstream_model": "minimax-text-01"
+    },
+    "moonshot-v1-32k": {
+      "upstream": "one_api",
+      "upstream_model": "moonshot-v1-32k"
+    }
+  },
+  "sites": [
+    {
+      "site_token": "site-demo-a",
+      "name": "demo-a",
+      "allowed_models": [
+        "vertex-gemini-flash",
+        "vertex-gemini-pro",
+        "vertex-imagen-3",
+        "gpt-4o-mini",
+        "claude-3-7-sonnet",
+        "deepseek-chat"
+      ],
+      "default_chat_model": "gpt-4o-mini",
+      "default_image_model": "vertex-imagen-3",
+      "extra_headers": {
+        "X-Site-Group": "demo-a"
+      }
+    },
+    {
+      "site_token": "site-demo-b",
+      "name": "demo-b",
+      "allowed_models": [
+        "vertex-gemini-flash",
+        "qwen-max",
+        "glm-4.5",
+        "moonshot-v1-32k"
+      ],
+      "default_chat_model": "vertex-gemini-flash",
+      "default_image_model": "vertex-imagen-3",
+      "extra_headers": {
+        "X-Site-Group": "demo-b"
+      }
+    }
+  ]
+}
+

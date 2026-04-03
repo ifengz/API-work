@@ -1,0 +1,11 @@
+__pycache__/
+.DS_Store
+.env
+.venv/
+*.pyc
+data/
+credentials/*.json
+config/gateway.json
+config/litellm.generated.yaml
+config/vertex-pool.json
+
