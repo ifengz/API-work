@@ -21,14 +21,6 @@
       "rpm": 120
     },
     {
-      "alias": "vertex-gemini-flash",
-      "provider_model": "vertex_ai/gemini-2.5-flash",
-      "project_env": "VERTEX_SECONDARY_PROJECT",
-      "location_env": "VERTEX_SECONDARY_LOCATION",
-      "credentials_file": "/app/credentials/vertex-secondary.json",
-      "rpm": 120
-    },
-    {
       "alias": "vertex-gemini-pro",
       "provider_model": "vertex_ai/gemini-2.5-pro",
       "project_env": "VERTEX_PRIMARY_PROJECT",
@@ -46,4 +38,3 @@
     }
   ]
 }
-

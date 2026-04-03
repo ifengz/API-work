@@ -26,6 +26,8 @@ python3 scripts/build_litellm_config.py \
   --output config/litellm.generated.yaml
 ```
 
+默认示例只启用 `vertex-primary.json`。要上双池负载均衡时，再手动补 `vertex-secondary.json` 和第二组 deployment。
+
 3. 做本地自检。
 
 ```bash
