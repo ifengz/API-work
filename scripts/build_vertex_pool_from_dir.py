@@ -112,17 +112,29 @@ def provider_model_name(model_name: str) -> str:
     return f"vertex_ai/{model_name}"
 
 
+def resolve_container_credentials_dir(output_dir: Path, configured_dir: str | None = None) -> str:
+    if configured_dir:
+        return configured_dir.rstrip("/")
+    if output_dir.is_absolute():
+        raise ValueError("absolute output credentials dir requires explicit container credentials dir")
+    relative = output_dir.as_posix().lstrip("./").rstrip("/")
+    if not relative:
+        raise ValueError("output credentials dir cannot be empty")
+    return f"/app/{relative}"
+
+
 def build_vertex_pool_config(
     credentials: list[VertexCredential],
     models: list[str],
     location: str,
     copied_paths: dict[tuple[str, str], Path] | None = None,
+    container_credentials_dir: str = "/app/credentials/imported",
 ) -> dict[str, object]:
     deployments: list[dict[str, object]] = []
     for credential in credentials:
         key = (credential.project_id, credential.client_email)
         copied_path = copied_paths[key] if copied_paths else credential.path
-        credentials_file = f"/app/credentials/imported/{copied_path.name}"
+        credentials_file = f"{container_credentials_dir.rstrip('/')}/{copied_path.name}"
         for model_name in models:
             deployments.append(
                 {
@@ -156,6 +168,11 @@ def parse_args() -> argparse.Namespace:
         default="credentials/imported",
         help="directory where deduplicated credential files will be copied",
     )
+    parser.add_argument(
+        "--container-credentials-dir",
+        default="",
+        help="credential directory path inside container, default follows output-credentials-dir",
+    )
     parser.add_argument("--projects", default="", help="comma-separated project ids to include")
     parser.add_argument("--max-per-project", type=int, default=None, help="limit credentials per project")
     parser.add_argument("--location", default="global", help="vertex region, default global")
@@ -175,8 +192,19 @@ def main() -> int:
     if not selected:
         raise SystemExit("no matching vertex credentials found")
 
-    copied = copy_credentials(selected, Path(args.output_credentials_dir))
-    config = build_vertex_pool_config(selected, models, args.location, copied)
+    output_credentials_dir = Path(args.output_credentials_dir)
+    copied = copy_credentials(selected, output_credentials_dir)
+    container_credentials_dir = resolve_container_credentials_dir(
+        output_credentials_dir,
+        args.container_credentials_dir or None,
+    )
+    config = build_vertex_pool_config(
+        selected,
+        models,
+        args.location,
+        copied,
+        container_credentials_dir=container_credentials_dir,
+    )
 
     output_config = Path(args.output_config)
     output_config.parent.mkdir(parents=True, exist_ok=True)

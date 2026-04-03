@@ -10,6 +10,7 @@ from scripts.build_vertex_pool_from_dir import (
     build_vertex_pool_config,
     copy_credentials,
     load_vertex_credentials,
+    resolve_container_credentials_dir,
     select_credentials,
 )
 
@@ -52,6 +53,16 @@ class VertexPoolBuilderTests(unittest.TestCase):
             copied = copy_credentials(credentials, output_dir)
             self.assertEqual(2, len(copied))
             self.assertTrue(all(path.exists() for path in copied.values()))
+
+    def test_container_credentials_dir_follows_relative_output_dir(self) -> None:
+        self.assertEqual(
+            "/app/credentials/imported",
+            resolve_container_credentials_dir(Path("credentials/imported")),
+        )
+        self.assertEqual(
+            "/runtime/vertex",
+            resolve_container_credentials_dir(Path("credentials/imported"), "/runtime/vertex"),
+        )
 
 
 if __name__ == "__main__":
