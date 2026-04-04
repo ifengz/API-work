@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass
 
-from .config import ConfigError, GatewayConfig, ModelRoute, SiteConfig
+from .config import ConfigError, GatewayConfig, SiteConfig
 
 
 class PolicyError(ValueError):
@@ -50,7 +50,9 @@ class GatewayPolicy:
                 f"model '{model_name}' is not allowed for site '{site.name}'"
             )
 
-        route = self.config.model_routes.get(model_name) or self._default_route(model_name)
+        route = self.config.model_routes.get(model_name)
+        if route is None:
+            raise PolicyError(f"model '{model_name}' has no configured route")
 
         try:
             upstream = self.config.get_upstream(route.upstream)
@@ -81,9 +83,3 @@ class GatewayPolicy:
         if request_kind == "images":
             return site.default_image_model
         return site.default_chat_model
-
-    @staticmethod
-    def _default_route(model_name: str) -> ModelRoute:
-        lowered = model_name.lower()
-        upstream = "litellm" if "gemini" in lowered or lowered.startswith("vertex") else "one_api"
-        return ModelRoute(upstream=upstream, upstream_model=model_name)

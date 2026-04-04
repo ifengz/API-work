@@ -10,7 +10,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from site_gateway.config import load_gateway_config
+from site_gateway.config import ConfigError, load_gateway_config
 from site_gateway.policy import GatewayPolicy, PolicyError
 from site_gateway.upstream import build_upstream_request
 
@@ -29,21 +29,37 @@ CONFIG_TEMPLATE = {
         }
     },
     "model_routes": {
+        "gemini-2.5-flash": {
+            "upstream": "litellm",
+            "upstream_model": "gemini-2.5-flash"
+        },
+        "gemini-2.5-flash-image": {
+            "upstream": "litellm",
+            "upstream_model": "gemini-2.5-flash-image"
+        },
         "gpt-4o-mini": {
             "upstream": "one_api",
             "upstream_model": "gpt-4o-mini"
+        },
+        "qwen-max": {
+            "upstream": "one_api",
+            "upstream_model": "qwen-max"
         }
     },
     "sites": [
         {
             "site_token": "site-demo-a",
             "name": "demo-a",
+            "allowed_origins": [
+                "https://image.usfan.net",
+                "http://127.0.0.1:5173"
+            ],
             "allowed_models": [
                 "gemini-2.5-flash",
                 "gpt-4o-mini",
                 "gemini-2.5-flash-image"
             ],
-            "default_chat_model": "gpt-4o-mini",
+            "default_chat_model": "gemini-2.5-flash",
             "default_image_model": "gemini-2.5-flash-image",
             "extra_headers": {
                 "X-Forwarded-Site": "demo-a"
@@ -52,6 +68,10 @@ CONFIG_TEMPLATE = {
         {
             "site_token": "site-demo-b",
             "name": "demo-b",
+            "allowed_origins": [
+                "https://image.usfan.net",
+                "http://127.0.0.1:5173"
+            ],
             "allowed_models": [
                 "gemini-2.5-flash",
                 "gemini-2.5-flash-image",
@@ -83,14 +103,14 @@ class SiteGatewayTests(unittest.TestCase):
     def tearDown(self) -> None:
         self.temp_dir.cleanup()
 
-    def test_vertex_models_default_to_litellm(self) -> None:
+    def test_explicit_route_is_used_for_litellm_model(self) -> None:
         decision = self.policy.resolve("site-demo-a", "gemini-2.5-flash", "chat")
         self.assertEqual(decision.upstream_name, "litellm")
 
     def test_default_model_used_when_request_model_missing(self) -> None:
         decision = self.policy.resolve("site-demo-a", None, "chat")
-        self.assertEqual(decision.request_model, "gpt-4o-mini")
-        self.assertEqual(decision.upstream_name, "one_api")
+        self.assertEqual(decision.request_model, "gemini-2.5-flash")
+        self.assertEqual(decision.upstream_name, "litellm")
 
     def test_disallowed_model_is_rejected(self) -> None:
         with self.assertRaises(PolicyError):
@@ -112,8 +132,9 @@ class SiteGatewayTests(unittest.TestCase):
             decision,
             {
                 "model": "ignored-by-gateway",
-                "messages": [{"role": "user", "content": "hi"}]
+                "messages": [{"role": "user", "content": "hi"}],
             },
+            trace_id="018f2f4e-5d1d-7c6a-b4fa-9d6c44f3a7ad",
         )
         payload = json.loads(body.decode("utf-8"))
 
@@ -121,6 +142,18 @@ class SiteGatewayTests(unittest.TestCase):
         self.assertEqual(payload["model"], "gpt-4o-mini")
         self.assertEqual(headers["Authorization"], "Bearer one-api-secret")
         self.assertEqual(headers["X-Forwarded-Site"], "demo-a")
+        self.assertEqual(
+            headers["X-Client-Trace-Id"],
+            "018f2f4e-5d1d-7c6a-b4fa-9d6c44f3a7ad",
+        )
+
+    def test_missing_model_route_is_rejected(self) -> None:
+        invalid = json.loads(json.dumps(CONFIG_TEMPLATE))
+        del invalid["model_routes"]["qwen-max"]
+        self.config_path.write_text(json.dumps(invalid), encoding="utf-8")
+
+        with self.assertRaises(ConfigError):
+            load_gateway_config(self.config_path)
 
 
 if __name__ == "__main__":

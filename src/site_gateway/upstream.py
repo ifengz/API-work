@@ -24,6 +24,7 @@ class UpstreamResponse:
 def build_upstream_request(
     decision: RoutingDecision,
     payload: Mapping[str, object],
+    trace_id: str,
 ) -> tuple[str, dict[str, str], bytes]:
     forwarded_payload = deepcopy(dict(payload))
     forwarded_payload["model"] = decision.upstream_model
@@ -38,8 +39,8 @@ def build_upstream_request(
     headers = {
         "Authorization": f"Bearer {upstream_token}",
         "Content-Type": "application/json",
-        "X-Site-Token": decision.site_token,
-        "X-Site-Name": decision.site_name,
+        "X-Client-Trace-Id": trace_id,
+        "X-Site-Id": decision.site_name,
     }
     headers.update(decision.extra_headers)
     body = json.dumps(forwarded_payload).encode("utf-8")
@@ -49,8 +50,9 @@ def build_upstream_request(
 def forward_request(
     decision: RoutingDecision,
     payload: Mapping[str, object],
+    trace_id: str,
 ) -> UpstreamResponse:
-    url, headers, body = build_upstream_request(decision, payload)
+    url, headers, body = build_upstream_request(decision, payload, trace_id)
     req = request.Request(url=url, data=body, headers=headers, method="POST")
 
     try:

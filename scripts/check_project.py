@@ -1,10 +1,14 @@
 from __future__ import annotations
 
 import json
+import sys
 from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "src"))
+
+from site_gateway.config import ConfigError, load_gateway_config
 
 
 REQUIRED_FILES = [
@@ -55,8 +59,24 @@ def check_litellm_template() -> list[str]:
     return errors
 
 
+def check_real_gateway_config(root: Path = ROOT) -> list[str]:
+    gateway_path = root / "config/gateway.json"
+    try:
+        load_gateway_config(gateway_path)
+    except FileNotFoundError:
+        return ["missing file: config/gateway.json"]
+    except (ConfigError, json.JSONDecodeError) as exc:
+        return [f"invalid config/gateway.json: {exc}"]
+    return []
+
+
 def main() -> int:
-    errors = check_files() + check_json_files() + check_litellm_template()
+    errors = (
+        check_files()
+        + check_json_files()
+        + check_litellm_template()
+        + check_real_gateway_config()
+    )
     if errors:
         for error in errors:
             print(error)
