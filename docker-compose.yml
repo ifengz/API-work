@@ -47,7 +47,7 @@ services:
       - "--port"
       - "4000"
       - "--num_workers"
-      - "1"
+      - "${LITELLM_NUM_WORKERS:-4}"
     ports:
       - "4000:4000"
     volumes:

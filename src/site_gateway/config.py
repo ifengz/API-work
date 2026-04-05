@@ -38,6 +38,8 @@ class SiteConfig:
     allowed_models: tuple[str, ...]
     default_chat_model: str
     default_image_model: str
+    chat_model_candidates: tuple[str, ...]
+    image_model_candidates: tuple[str, ...]
     extra_headers: dict[str, str] = field(default_factory=dict)
 
 
@@ -127,6 +129,14 @@ def load_gateway_config(path: str | Path) -> GatewayConfig:
             site.get("default_image_model"),
             f"site '{site_name}' default_image_model",
         )
+        chat_model_candidates = _optional_string_list(
+            site.get("chat_model_candidates"),
+            f"site '{site_name}' chat_model_candidates",
+        ) or (default_chat_model,)
+        image_model_candidates = _optional_string_list(
+            site.get("image_model_candidates"),
+            f"site '{site_name}' image_model_candidates",
+        ) or (default_image_model,)
 
         if default_chat_model not in allowed_models:
             raise ConfigError(
@@ -149,6 +159,23 @@ def load_gateway_config(path: str | Path) -> GatewayConfig:
             raise ConfigError(
                 f"site '{site_name}' default_image_model must exist in model_routes"
             )
+        if chat_model_candidates[0] != default_chat_model:
+            raise ConfigError(
+                f"site '{site_name}' chat_model_candidates must start with default_chat_model"
+            )
+        if image_model_candidates[0] != default_image_model:
+            raise ConfigError(
+                f"site '{site_name}' image_model_candidates must start with default_image_model"
+            )
+        for model_name in (*chat_model_candidates, *image_model_candidates):
+            if model_name not in allowed_models:
+                raise ConfigError(
+                    f"site '{site_name}' candidate model '{model_name}' must be listed in allowed_models"
+                )
+            if model_name not in model_routes:
+                raise ConfigError(
+                    f"site '{site_name}' candidate model '{model_name}' must exist in model_routes"
+                )
 
         sites[site_token] = SiteConfig(
             site_token=site_token,
@@ -157,6 +184,8 @@ def load_gateway_config(path: str | Path) -> GatewayConfig:
             allowed_models=allowed_models,
             default_chat_model=default_chat_model,
             default_image_model=default_image_model,
+            chat_model_candidates=chat_model_candidates,
+            image_model_candidates=image_model_candidates,
             extra_headers=dict(site.get("extra_headers", {})),
         )
 
@@ -204,3 +233,9 @@ def _require_origin_list(value: object, field_name: str) -> tuple[str, ...]:
         ):
             raise ConfigError(f"invalid {field_name}")
     return origins
+
+
+def _optional_string_list(value: object, field_name: str) -> tuple[str, ...] | None:
+    if value is None:
+        return None
+    return _require_string_list(value, field_name)

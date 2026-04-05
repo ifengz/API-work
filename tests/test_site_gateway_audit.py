@@ -34,6 +34,7 @@ class AuditStoreTests(unittest.TestCase):
                 request_model="gemini-2.5-flash",
                 upstream_name="litellm",
                 upstream_model="gemini-2.5-flash",
+                attempted_models_json='["gemini-2.5-flash"]',
                 status_code=200,
                 error_code=None,
                 duration_ms=1200,
@@ -54,6 +55,7 @@ class AuditStoreTests(unittest.TestCase):
                 request_model="gemini-2.5-flash-image",
                 upstream_name="litellm",
                 upstream_model="gemini-2.5-flash-image",
+                attempted_models_json='["gemini-2.5-flash-image"]',
                 status_code=200,
                 error_code=None,
                 duration_ms=3200,
@@ -74,6 +76,7 @@ class AuditStoreTests(unittest.TestCase):
                 request_model="gpt-4o-mini",
                 upstream_name="one_api",
                 upstream_model="gpt-4o-mini",
+                attempted_models_json='["gpt-4o-mini"]',
                 status_code=403,
                 error_code="MODEL_NOT_ALLOWED",
                 duration_ms=90,
@@ -122,6 +125,7 @@ class AuditStoreTests(unittest.TestCase):
                 request_model="gemini-2.5-flash",
                 upstream_name="litellm",
                 upstream_model="gemini-2.5-flash",
+                attempted_models_json='["gemini-2.5-flash"]',
                 status_code=200,
                 error_code=None,
                 duration_ms=100,
@@ -142,6 +146,7 @@ class AuditStoreTests(unittest.TestCase):
                 request_model="gpt-4o-mini",
                 upstream_name="one_api",
                 upstream_model="gpt-4o-mini",
+                attempted_models_json='["gpt-4o-mini"]',
                 status_code=200,
                 error_code=None,
                 duration_ms=200,
@@ -154,6 +159,7 @@ class AuditStoreTests(unittest.TestCase):
 
         recent = self.store.list_recent_events(limit=2)
         self.assertEqual([row["trace_id"] for row in recent], ["trace-new", "trace-old"])
+        self.assertEqual(recent[0]["attempted_models"], ["gemini-2.5-flash"])
 
 
 if __name__ == "__main__":

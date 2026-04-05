@@ -251,3 +251,62 @@ LiteLLM = Vertex / Gemini 执行层
   <verify>文档已收口，代码未改动</verify>
   <done>避免未经授权直接做架构变更</done>
 </task>
+
+## 2026-04-05 Gemini 多模态 chat 兼容修补
+
+| 目标 | 文件 | 动作 | 验证 | 完成标准 |
+| --- | --- | --- | --- | --- |
+| 清洗不稳定多模态字段 | `src/site_gateway/upstream.py`, `tests/test_site_gateway.py` | 仅对 Gemini 多模态 `chat` 请求清洗 `image_url.detail`，保留 `image_url.url` 和其他正文不动 | 单测断言转发体里 `detail` 已被移除，`url` 保留不变 | 后端不再把高风险兼容字段原样塞给上游 |
+| 补输入图尝试日志 | `src/site_gateway/server.py`, `tests/test_site_gateway_contract.py` | 对每次模型尝试额外打印 `input_image_count`，明确这次请求到底有没有带图 | 合同测试断言 stderr 含 `input_image_count` | 带图分析链路排障不再靠猜 |
+
+## 2026-04-05 LiteLLM 并发开关最小调整
+
+<task type="auto">
+  <name>把默认 worker 提到 4</name>
+  <files>docker-compose.yml, .env.example</files>
+  <action>把 LiteLLM 的 `--num_workers` 从硬编码 `1` 改成环境变量可配，默认值提到 `4`；`.env.example` 补 `LITELLM_NUM_WORKERS=4`</action>
+  <verify>`docker-compose.yml` 不再写死 `1`；默认情况下不改 `.env` 也会按 `4` 启动</verify>
+  <done>当前 20 份以上 deployment 能被多个 worker 同时消费</done>
+</task>
+
+<task type="checkpoint">
+  <name>回归确认现有链路不被带坏</name>
+  <files>docker-compose.yml, .env.example, tests/*</files>
+  <action>保持路由、鉴权、审计代码不变，只做运行参数调整后跑本地回归</action>
+  <verify>`python3 -m unittest discover -s tests`、`python3 scripts/check_project.py`、`git diff --check` 全部通过</verify>
+  <done>确认这次只是并发开关调整，不是新的功能回归风险</done>
+</task>
+
+## 2026-04-05 站点默认模型顺序回退执行单
+
+<task type="auto">
+  <name>把站点默认模型从“单默认值”升级成“有序候选链”</name>
+  <files>src/site_gateway/config.py, src/site_gateway/policy.py, config/gateway.json, config/gateway.example.json</files>
+  <action>为站点配置补 `chat_model_candidates` 和 `image_model_candidates`；未显式传 `model` 时按候选链顺序尝试，而不是只认一个默认模型</action>
+  <verify>站点配置能表达 chat 5 个模型、生图 3 个模型的固定顺序；显式 `model` 仍保持最高优先级</verify>
+  <done>默认模型链不再靠口头约定</done>
+</task>
+
+<task type="auto">
+  <name>把真正的顺序回退和日志放到同一层</name>
+  <files>src/site_gateway/server.py, src/site_gateway/audit.py</files>
+  <action>在 `site-gateway` 执行“按顺序尝试模型”；对可重试失败才切下一个模型，并打印 `try/fail/success` 日志，同时把尝试链写进审计</action>
+  <verify>同一条请求的日志能看到尝试过哪些模型、在哪一步成功或失败；不会因为 LiteLLM 双重回退造成假日志</verify>
+  <done>回退真值和日志真值统一</done>
+</task>
+
+<task type="auto">
+  <name>校准 Vertex 池边界</name>
+  <files>config/vertex-pool.json, config/litellm.generated.yaml, scripts/build_litellm_config.py</files>
+  <action>保证用户要求的 8 个模型都在 Vertex 池和生成后的 LiteLLM 配置中可用；不再让 LiteLLM 对同一条站点默认链做二次跨模型回退</action>
+  <verify>8 个模型在 `vertex-pool` 和生成 YAML 里都存在；不会出现 site-gateway 与 LiteLLM 双重跨模型回退</verify>
+  <done>执行层能力完整，但回退职责只落一层</done>
+</task>
+
+<task type="tdd">
+  <name>用测试锁住默认链、显式模型和回退日志</name>
+  <files>tests/test_site_gateway.py, tests/test_site_gateway_contract.py, tests/test_build_litellm_config.py</files>
+  <action>先补默认候选链、显式模型优先、可重试失败回退、不可重试失败不回退、尝试链入审计和控制台日志的测试，再补实现</action>
+  <verify>`python3 -m unittest discover -s tests` 通过，且新测试覆盖 chat/image 两类顺序链</verify>
+  <done>后续再调模型顺序时不会把行为搞丢</done>
+</task>

@@ -28,6 +28,7 @@ class AuditEvent:
     request_model: str | None
     upstream_name: str | None
     upstream_model: str | None
+    attempted_models_json: str | None
     status_code: int
     error_code: str | None
     duration_ms: int
@@ -69,6 +70,7 @@ class AuditStore:
                     request_model,
                     upstream_name,
                     upstream_model,
+                    attempted_models_json,
                     status_code,
                     error_code,
                     duration_ms,
@@ -87,6 +89,7 @@ class AuditStore:
                     :request_model,
                     :upstream_name,
                     :upstream_model,
+                    :attempted_models_json,
                     :status_code,
                     :error_code,
                     :duration_ms,
@@ -113,6 +116,7 @@ class AuditStore:
                     request_model,
                     upstream_name,
                     upstream_model,
+                    attempted_models_json,
                     status_code,
                     error_code,
                     duration_ms,
@@ -126,7 +130,7 @@ class AuditStore:
                 """,
                 (max(limit, 1),),
             ).fetchall()
-        return [dict(row) for row in rows]
+        return [_row_to_event_dict(row) for row in rows]
 
     def summarize_by_minute(
         self,
@@ -213,6 +217,7 @@ class AuditStore:
                     request_model TEXT,
                     upstream_name TEXT,
                     upstream_model TEXT,
+                    attempted_models_json TEXT,
                     status_code INTEGER NOT NULL,
                     error_code TEXT,
                     duration_ms INTEGER NOT NULL,
@@ -247,11 +252,22 @@ class AuditStore:
                 ON request_audit (request_model)
                 """
             )
+            self._ensure_columns(connection)
 
     def _connect(self) -> sqlite3.Connection:
         connection = sqlite3.connect(self.db_path)
         connection.row_factory = sqlite3.Row
         return connection
+
+    def _ensure_columns(self, connection: sqlite3.Connection) -> None:
+        existing_columns = {
+            row["name"]
+            for row in connection.execute("PRAGMA table_info(request_audit)").fetchall()
+        }
+        if "attempted_models_json" not in existing_columns:
+            connection.execute(
+                "ALTER TABLE request_audit ADD COLUMN attempted_models_json TEXT"
+            )
 
 
 def get_audit_db_path(raw_path: str | None = None) -> Path:
@@ -314,3 +330,27 @@ def mask_token(value: str) -> str:
     if len(value) <= 10:
         return f"{value[:3]}...{value[-3:]}"
     return f"{value[:7]}...{value[-4:]}"
+
+
+def encode_attempted_models(models: list[str] | tuple[str, ...]) -> str:
+    return json.dumps(list(models), ensure_ascii=False)
+
+
+def decode_attempted_models(raw_value: object) -> list[str]:
+    if not isinstance(raw_value, str) or not raw_value:
+        return []
+    try:
+        payload = json.loads(raw_value)
+    except json.JSONDecodeError:
+        return []
+    if not isinstance(payload, list):
+        return []
+    return [item for item in payload if isinstance(item, str)]
+
+
+def _row_to_event_dict(row: sqlite3.Row) -> dict[str, Any]:
+    payload = dict(row)
+    payload["attempted_models"] = decode_attempted_models(
+        payload.pop("attempted_models_json", None)
+    )
+    return payload

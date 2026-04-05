@@ -29,9 +29,33 @@ CONFIG_TEMPLATE = {
         }
     },
     "model_routes": {
+        "gemini-3-flash-preview": {
+            "upstream": "litellm",
+            "upstream_model": "gemini-3-flash-preview"
+        },
+        "gemini-3.1-pro-preview": {
+            "upstream": "litellm",
+            "upstream_model": "gemini-3.1-pro-preview"
+        },
+        "gemini-3.1-flash-lite-preview": {
+            "upstream": "litellm",
+            "upstream_model": "gemini-3.1-flash-lite-preview"
+        },
+        "gemini-2.5-pro": {
+            "upstream": "litellm",
+            "upstream_model": "gemini-2.5-pro"
+        },
         "gemini-2.5-flash": {
             "upstream": "litellm",
             "upstream_model": "gemini-2.5-flash"
+        },
+        "gemini-3-pro-image-preview": {
+            "upstream": "litellm",
+            "upstream_model": "gemini-3-pro-image-preview"
+        },
+        "gemini-3.1-flash-image-preview": {
+            "upstream": "litellm",
+            "upstream_model": "gemini-3.1-flash-image-preview"
         },
         "gemini-2.5-flash-image": {
             "upstream": "litellm",
@@ -55,12 +79,30 @@ CONFIG_TEMPLATE = {
                 "http://127.0.0.1:5173"
             ],
             "allowed_models": [
+                "gemini-3-flash-preview",
+                "gemini-3.1-pro-preview",
+                "gemini-3.1-flash-lite-preview",
+                "gemini-2.5-pro",
                 "gemini-2.5-flash",
+                "gemini-3-pro-image-preview",
+                "gemini-3.1-flash-image-preview",
                 "gpt-4o-mini",
                 "gemini-2.5-flash-image"
             ],
-            "default_chat_model": "gemini-2.5-flash",
-            "default_image_model": "gemini-2.5-flash-image",
+            "default_chat_model": "gemini-3-flash-preview",
+            "default_image_model": "gemini-3-pro-image-preview",
+            "chat_model_candidates": [
+                "gemini-3-flash-preview",
+                "gemini-3.1-pro-preview",
+                "gemini-3.1-flash-lite-preview",
+                "gemini-2.5-pro",
+                "gemini-2.5-flash"
+            ],
+            "image_model_candidates": [
+                "gemini-3-pro-image-preview",
+                "gemini-3.1-flash-image-preview",
+                "gemini-2.5-flash-image"
+            ],
             "extra_headers": {
                 "X-Forwarded-Site": "demo-a"
             }
@@ -73,12 +115,30 @@ CONFIG_TEMPLATE = {
                 "http://127.0.0.1:5173"
             ],
             "allowed_models": [
+                "gemini-3-flash-preview",
+                "gemini-3.1-pro-preview",
+                "gemini-3.1-flash-lite-preview",
+                "gemini-2.5-pro",
                 "gemini-2.5-flash",
+                "gemini-3-pro-image-preview",
+                "gemini-3.1-flash-image-preview",
                 "gemini-2.5-flash-image",
                 "qwen-max"
             ],
-            "default_chat_model": "gemini-2.5-flash",
-            "default_image_model": "gemini-2.5-flash-image",
+            "default_chat_model": "gemini-3-flash-preview",
+            "default_image_model": "gemini-3-pro-image-preview",
+            "chat_model_candidates": [
+                "gemini-3-flash-preview",
+                "gemini-3.1-pro-preview",
+                "gemini-3.1-flash-lite-preview",
+                "gemini-2.5-pro",
+                "gemini-2.5-flash"
+            ],
+            "image_model_candidates": [
+                "gemini-3-pro-image-preview",
+                "gemini-3.1-flash-image-preview",
+                "gemini-2.5-flash-image"
+            ],
             "extra_headers": {
                 "X-Forwarded-Site": "demo-b"
             }
@@ -109,8 +169,21 @@ class SiteGatewayTests(unittest.TestCase):
 
     def test_default_model_used_when_request_model_missing(self) -> None:
         decision = self.policy.resolve("site-demo-a", None, "chat")
-        self.assertEqual(decision.request_model, "gemini-2.5-flash")
+        self.assertEqual(decision.request_model, "gemini-3-flash-preview")
         self.assertEqual(decision.upstream_name, "litellm")
+
+    def test_default_chat_candidates_follow_order(self) -> None:
+        decisions = self.policy.resolve_candidates("site-demo-a", None, "chat")
+        self.assertEqual(
+            [decision.request_model for decision in decisions],
+            [
+                "gemini-3-flash-preview",
+                "gemini-3.1-pro-preview",
+                "gemini-3.1-flash-lite-preview",
+                "gemini-2.5-pro",
+                "gemini-2.5-flash",
+            ],
+        )
 
     def test_disallowed_model_is_rejected(self) -> None:
         with self.assertRaises(PolicyError):
@@ -118,13 +191,17 @@ class SiteGatewayTests(unittest.TestCase):
 
     def test_image_requests_use_default_image_model(self) -> None:
         decision = self.policy.resolve("site-demo-a", None, "images")
-        self.assertEqual(decision.request_model, "gemini-2.5-flash-image")
+        self.assertEqual(decision.request_model, "gemini-3-pro-image-preview")
         self.assertEqual(decision.upstream_name, "litellm")
 
     def test_demo_b_default_image_model_is_allowed(self) -> None:
         decision = self.policy.resolve("site-demo-b", None, "images")
-        self.assertEqual(decision.request_model, "gemini-2.5-flash-image")
+        self.assertEqual(decision.request_model, "gemini-3-pro-image-preview")
         self.assertEqual(decision.upstream_name, "litellm")
+
+    def test_explicit_model_skips_default_candidates(self) -> None:
+        decisions = self.policy.resolve_candidates("site-demo-a", "gemini-2.5-pro", "chat")
+        self.assertEqual([decision.request_model for decision in decisions], ["gemini-2.5-pro"])
 
     def test_upstream_request_overrides_model_and_preserves_headers(self) -> None:
         decision = self.policy.resolve("site-demo-a", "gpt-4o-mini", "chat")
@@ -146,6 +223,37 @@ class SiteGatewayTests(unittest.TestCase):
             headers["X-Client-Trace-Id"],
             "018f2f4e-5d1d-7c6a-b4fa-9d6c44f3a7ad",
         )
+
+    def test_gemini_multimodal_chat_strips_image_url_detail_before_forward(self) -> None:
+        decision = self.policy.resolve("site-demo-a", "gemini-2.5-flash", "chat")
+        url, headers, body = build_upstream_request(
+            decision,
+            {
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": "analyze this image"},
+                            {
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": "data:image/jpeg;base64,AAA",
+                                    "detail": "high",
+                                },
+                            },
+                        ],
+                    }
+                ]
+            },
+            trace_id="018f2f4e-5d1d-7c6a-b4fa-9d6c44f3a7ad",
+        )
+        payload = json.loads(body.decode("utf-8"))
+
+        self.assertEqual(url, "http://litellm:4000/v1/chat/completions")
+        self.assertEqual(headers["Authorization"], "Bearer litellm-secret")
+        image_part = payload["messages"][0]["content"][1]
+        self.assertEqual(image_part["image_url"]["url"], "data:image/jpeg;base64,AAA")
+        self.assertNotIn("detail", image_part["image_url"])
 
     def test_missing_model_route_is_rejected(self) -> None:
         invalid = json.loads(json.dumps(CONFIG_TEMPLATE))

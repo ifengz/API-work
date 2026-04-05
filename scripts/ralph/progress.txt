@@ -24,4 +24,40 @@ Started: 2026-04-05
 - **Learnings for future iterations:**
   - `site-gateway` 的错误路径同样要记账，不然最需要排障的时候恰好没记录。
   - `images` 请求当前更稳定的真值是“请求次数 + 返回图片数”；不要假造 token usage。
+
+## 2026-04-05 站点默认模型顺序链 - queued
+- 用户把默认模型需求从“单默认值”升级成“chat/image 各自有序候选链 + 失败顺序回退 + 可打印日志”
+- 当前执行口径已经收紧：
+  - 真正的跨模型回退要落在 `site-gateway`
+  - LiteLLM 不再对同一条站点默认链承担第二层跨模型回退，避免日志失真
+- Planned stories:
+  - `US-004` 有序 chat/image 候选链
+  - `US-005` 尝试日志与审计链路
+
+## 2026-04-05 04:40 - US-004/US-005
+- `site-gateway` 现在支持站点级 `chat_model_candidates` 和 `image_model_candidates`
+- 未显式传 `model` 时，会按用户指定顺序尝试模型；显式 `model` 仍只打该模型
+- 可重试失败（429/5xx/网络错误）才会切下一个模型，不会把 400/403 这类请求错误误当作回退信号
+- 每次尝试都会打印结构化 JSON 日志，包含 `trace_id / phase / attempt / request_model / upstream_model`
+- 审计事件新增 `attempted_models`，便于确认一条请求最后是否已经回退到旧模型
+- 为避免双重回退导致日志失真，清空了 `vertex-pool` 里的跨模型 fallback，并重建了 `litellm.generated.yaml`
+- Files changed:
+  - `src/site_gateway/config.py`
+  - `src/site_gateway/policy.py`
+  - `src/site_gateway/server.py`
+  - `src/site_gateway/audit.py`
+  - `scripts/build_litellm_config.py`
+  - `config/gateway.json`
+  - `config/gateway.example.json`
+  - `config/vertex-pool.json`
+  - `config/litellm.generated.yaml`
+  - `tests/test_site_gateway.py`
+  - `tests/test_site_gateway_contract.py`
+  - `tests/test_site_gateway_audit.py`
+  - `tests/test_build_litellm_config.py`
+  - `prd.json`
+- Verification:
+  - `python3 -m unittest discover -s tests`
+  - `python3 scripts/check_project.py`
+  - `git diff --check`
 ---

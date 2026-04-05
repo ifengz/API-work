@@ -1,7 +1,7 @@
 {
   "project": "API-work",
   "branchName": "main",
-  "description": "Add site-gateway audit logging with minute-level and dimension summaries, then prove it with tests.",
+  "description": "Add ordered site-gateway model fallback chains with attempt logging, while keeping audit logging and minute-level summaries intact, then prove it with tests.",
   "userStories": [
     {
       "id": "US-001",
@@ -44,6 +44,35 @@
       "priority": 3,
       "passes": true,
       "notes": ""
+    },
+    {
+      "id": "US-004",
+      "title": "Support ordered chat and image model chains",
+      "description": "As an operator, I need each site token to express an ordered chat chain and image chain so requests can default to the first preferred Gemini model and fall back in a fixed order only when the upstream failure is retriable.",
+      "acceptanceCriteria": [
+        "Gateway config supports ordered chat and image model candidate lists per site",
+        "If request JSON explicitly includes model, that explicit model remains highest priority and no default chain is used",
+        "If request JSON omits model, chat and image requests follow the configured ordered model chain",
+        "Retriable upstream failures can advance to the next model in the chain, while non-retriable failures stop immediately",
+        "Tests fail first and then pass"
+      ],
+      "priority": 4,
+      "passes": true,
+      "notes": "已实现 chat_model_candidates / image_model_candidates；显式 model 优先，默认链顺序回退只在可重试失败时继续。"
+    },
+    {
+      "id": "US-005",
+      "title": "Print and audit fallback attempt logs",
+      "description": "As an operator, I need the gateway to print which models were tried for each request and preserve the attempt chain in audit data so I can verify whether a site token really used a Gemini 3 model or fell back to an older one.",
+      "acceptanceCriteria": [
+        "Gateway prints a structured try/fail/success attempt log per request trace",
+        "Audit data stores the ordered attempted models and final selected model",
+        "Recent audit reads include the attempt chain for troubleshooting",
+        "Full project test suite passes after the change"
+      ],
+      "priority": 5,
+      "passes": true,
+      "notes": "已打印结构化尝试日志，并把 attempted_models 落入审计，recent 查询可直接读取。"
     }
   ]
 }

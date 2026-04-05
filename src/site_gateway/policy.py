@@ -36,6 +36,14 @@ class GatewayPolicy:
         requested_model: str | None,
         request_kind: str,
     ) -> RoutingDecision:
+        return self.resolve_candidates(site_token, requested_model, request_kind)[0]
+
+    def resolve_candidates(
+        self,
+        site_token: str,
+        requested_model: str | None,
+        request_kind: str,
+    ) -> tuple[RoutingDecision, ...]:
         if request_kind not in {"chat", "images"}:
             raise PolicyError(f"unsupported request kind: {request_kind}")
 
@@ -44,7 +52,18 @@ class GatewayPolicy:
         except ConfigError as exc:
             raise PolicyError(str(exc)) from exc
 
-        model_name = self._resolve_model_name(site, requested_model, request_kind)
+        model_names = self._resolve_model_names(site, requested_model, request_kind)
+        return tuple(
+            self._build_decision(site, request_kind, model_name)
+            for model_name in model_names
+        )
+
+    def _build_decision(
+        self,
+        site: SiteConfig,
+        request_kind: str,
+        model_name: str,
+    ) -> RoutingDecision:
         if model_name not in site.allowed_models:
             raise PolicyError(
                 f"model '{model_name}' is not allowed for site '{site.name}'"
@@ -73,13 +92,13 @@ class GatewayPolicy:
         )
 
     @staticmethod
-    def _resolve_model_name(
+    def _resolve_model_names(
         site: SiteConfig,
         requested_model: str | None,
         request_kind: str,
-    ) -> str:
+    ) -> tuple[str, ...]:
         if requested_model:
-            return requested_model
+            return (requested_model,)
         if request_kind == "images":
-            return site.default_image_model
-        return site.default_chat_model
+            return site.image_model_candidates
+        return site.chat_model_candidates

@@ -180,7 +180,15 @@
   - `POST /v1/chat/completions` 带合法 UUIDv7 trace -> `200`
   - `POST /v1/images/generations` 带合法 UUIDv7 trace 且不传 `model` -> `200`
   - `POST /v1/images/generations` 带合法 UUIDv7 trace 且显式传 `gemini-2.5-flash-image` -> `200`
-  - `POST /v1/images/generations` 若传 `gemini-2.5-flash-image-preview` -> `403 MODEL_NOT_ALLOWED`
+- `POST /v1/images/generations` 若传 `gemini-2.5-flash-image-preview` -> `403 MODEL_NOT_ALLOWED`
+
+## 2026-04-05 Gemini 多模态 chat 兼容修补进度
+
+- 已按用户给的真请求结构收口问题边界：失败点在 `api-work` 多模态 `chat` 上游链，不在前端 prompt 或字段拼装。
+- 已在 `site-gateway` 增加 Gemini 多模态 `chat` 的最小兼容清洗：转发前删除 `image_url.detail`，保留 `data:image/...` 本体不变。
+- 已在模型尝试日志增加 `input_image_count`，后续线上 trace 能直接看出这次请求到底有没有带图。
+- 已完成本地回归：`python3 -m unittest discover -s tests` -> `38 tests OK`，`python3 scripts/check_project.py` 通过，`git diff --check` 通过。
+- 对应 `task_issue` 已收口成“已实现，待验收”。
 - 当前收口：
   - `8080` 公网入口已恢复到一期合同状态
   - 其他项目要接入时，必须同时满足三件事：`Authorization Bearer site_token`、合法 `X-Client-Trace-Id`、image 模型名走白名单或直接不传
@@ -218,3 +226,55 @@
   - `python3 scripts/check_project.py` -> `project skeleton looks consistent`
   - `git diff --check` -> 通过
   - `bash -n scripts/ralph/ralph.sh` -> 通过
+
+### LiteLLM 并发开关调整
+- 用户确认先把 LiteLLM 默认 worker 提到 `4`
+- 已按最小改动收口：
+  - 不改模型路由
+  - 不改审计逻辑
+  - 只改 `docker-compose.yml` 和 `.env.example`
+- 已完成动作：
+  - 把 `--num_workers` 改成 `${LITELLM_NUM_WORKERS:-4}`
+  - 补 `LITELLM_NUM_WORKERS=4`
+  - 跑 `python3 -m unittest discover -s tests` -> `30 tests OK`
+  - 跑 `python3 scripts/check_project.py` -> `project skeleton looks consistent`
+  - 跑 `git diff --check` -> 通过
+
+### 远端重启尝试
+- 已先尝试在本机会话直接执行 `docker compose up -d --force-recreate litellm`
+- 当前宿主环境没有 `docker` 可执行文件：
+  - `command -v docker` 为空
+  - `/usr/local/bin/docker`、`/opt/homebrew/bin/docker`、`/Applications/Docker.app` 都不存在
+- 已尝试 SSH 直连：
+  - `ssh -o BatchMode=yes root@38.246.250.228 ...` 返回 `Permission denied (password)`
+- 已尝试切回浏览器固定入口（宝塔）：
+  - `browser-use`
+  - `browserbase`
+  - `chrome-devtools`
+  - `playwright`
+- 当前会话里上述浏览器执行器全部返回 `Transport closed`
+- 结论：这次不是代码问题，而是当前会话没有可执行的远端操作入口，暂时无法代为完成重启
+
+### 站点默认模型顺序回退
+- 用户把需求收口成 3 件事一起做：
+  - chat 默认链：`gemini-3-flash-preview -> gemini-3.1-pro-preview -> gemini-3.1-flash-lite-preview -> gemini-2.5-pro -> gemini-2.5-flash`
+  - image 默认链：`gemini-3-pro-image-preview -> gemini-3.1-flash-image-preview -> gemini-2.5-flash-image`
+  - 要求失败后按顺序切下一个模型继续尝试，并且日志可打印、测试必须跑通
+- 第一性原理校正：
+  - 不能把跨模型回退同时放在 `site-gateway` 和 LiteLLM 两层
+  - 否则日志会失真，看起来像模型 A 成功，实际可能是 LiteLLM 内部模型 B 成功
+- 当前执行口径：
+  - `site-gateway` 负责顺序回退真执行和尝试日志
+  - `vertex-pool` 只负责声明这些模型都可用，不再承担同一条站点默认链的跨模型回退
+- 已完成实现：
+  - `config.py / policy.py` 支持 `chat_model_candidates`、`image_model_candidates`
+  - `server.py` 支持显式模型优先、默认链顺序尝试、429/5xx/网络错误时继续切下一个模型
+  - 每次尝试会打印结构化 `try / fallback / success / error` 日志
+  - 审计表新增尝试链字段，`scripts/read_audit.py recent` 可直接看到 `attempted_models`
+  - 本地 `gateway.json` 和 `gateway.example.json` 已收口到用户要求的 chat/image 顺序
+  - `vertex-pool.json` 的跨模型 fallback 已清空，避免和网关双重回退
+  - 已重建 `config/litellm.generated.yaml`
+- 验证结果：
+  - `python3 -m unittest discover -s tests` -> `36 tests OK`
+  - `python3 scripts/check_project.py` -> `project skeleton looks consistent`
+  - `git diff --check` -> 通过

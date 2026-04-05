@@ -53,11 +53,14 @@ def render_litellm_yaml(config: dict[str, object]) -> str:
     lines.append(f"  timeout: {int(router.get('timeout', 120))}")
 
     fallbacks = router.get("fallbacks", {})
-    lines.append("  fallbacks:")
-    for model_name, fallback_models in fallbacks.items():
-        lines.append(f"    - {model_name}:")
-        for fallback_model in fallback_models:
-            lines.append(f"        - {fallback_model}")
+    if fallbacks:
+        lines.append("  fallbacks:")
+        for model_name, fallback_models in fallbacks.items():
+            lines.append(f"    - {model_name}:")
+            for fallback_model in fallback_models:
+                lines.append(f"        - {fallback_model}")
+    else:
+        lines.append("  fallbacks: []")
 
     lines.extend(
         [

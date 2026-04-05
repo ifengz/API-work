@@ -37,9 +37,33 @@ CONFIG_TEMPLATE = {
         },
     },
     "model_routes": {
+        "gemini-3-flash-preview": {
+            "upstream": "litellm",
+            "upstream_model": "gemini-3-flash-preview",
+        },
+        "gemini-3.1-pro-preview": {
+            "upstream": "litellm",
+            "upstream_model": "gemini-3.1-pro-preview",
+        },
+        "gemini-3.1-flash-lite-preview": {
+            "upstream": "litellm",
+            "upstream_model": "gemini-3.1-flash-lite-preview",
+        },
+        "gemini-2.5-pro": {
+            "upstream": "litellm",
+            "upstream_model": "gemini-2.5-pro",
+        },
         "gemini-2.5-flash": {
             "upstream": "litellm",
             "upstream_model": "gemini-2.5-flash",
+        },
+        "gemini-3-pro-image-preview": {
+            "upstream": "litellm",
+            "upstream_model": "gemini-3-pro-image-preview",
+        },
+        "gemini-3.1-flash-image-preview": {
+            "upstream": "litellm",
+            "upstream_model": "gemini-3.1-flash-image-preview",
         },
         "gemini-2.5-flash-image": {
             "upstream": "litellm",
@@ -58,12 +82,30 @@ CONFIG_TEMPLATE = {
                 "https://image.usfan.net",
             ],
             "allowed_models": [
+                "gemini-3-flash-preview",
+                "gemini-3.1-pro-preview",
+                "gemini-3.1-flash-lite-preview",
+                "gemini-2.5-pro",
                 "gemini-2.5-flash",
+                "gemini-3-pro-image-preview",
+                "gemini-3.1-flash-image-preview",
                 "gemini-2.5-flash-image",
                 "gpt-4o-mini",
             ],
-            "default_chat_model": "gemini-2.5-flash",
-            "default_image_model": "gemini-2.5-flash-image",
+            "default_chat_model": "gemini-3-flash-preview",
+            "default_image_model": "gemini-3-pro-image-preview",
+            "chat_model_candidates": [
+                "gemini-3-flash-preview",
+                "gemini-3.1-pro-preview",
+                "gemini-3.1-flash-lite-preview",
+                "gemini-2.5-pro",
+                "gemini-2.5-flash"
+            ],
+            "image_model_candidates": [
+                "gemini-3-pro-image-preview",
+                "gemini-3.1-flash-image-preview",
+                "gemini-2.5-flash-image"
+            ],
         },
         {
             "site_token": "site-demo-b",
@@ -76,6 +118,8 @@ CONFIG_TEMPLATE = {
             ],
             "default_chat_model": "gpt-4o-mini",
             "default_image_model": "gpt-4o-mini",
+            "chat_model_candidates": ["gpt-4o-mini"],
+            "image_model_candidates": ["gpt-4o-mini"],
         },
     ],
 }
@@ -283,10 +327,157 @@ class SiteGatewayContractTests(unittest.TestCase):
         self.assertEqual(handler.sent_status, 200)
         self.assertEqual(rows[0]["trace_id"], VALID_TRACE_ID)
         self.assertEqual(rows[0]["site_name"], "demo-a")
-        self.assertEqual(rows[0]["request_model"], "gemini-2.5-flash")
+        self.assertEqual(rows[0]["request_model"], "gemini-3-flash-preview")
         self.assertEqual(rows[0]["upstream_name"], "litellm")
         self.assertEqual(rows[0]["status_code"], 200)
         self.assertEqual(rows[0]["total_tokens"], 20)
+        self.assertEqual(rows[0]["attempted_models"], ["gemini-3-flash-preview"])
+
+    @patch("site_gateway.server.forward_request")
+    def test_retriable_failure_falls_back_to_next_candidate_and_logs_attempts(self, mocked_forward_request) -> None:
+        mocked_forward_request.side_effect = [
+            UpstreamResponse(
+                status_code=503,
+                headers={"Content-Type": "application/json"},
+                body=json.dumps({"error": "try next"}).encode("utf-8"),
+            ),
+            UpstreamResponse(
+                status_code=200,
+                headers={"Content-Type": "application/json"},
+                body=json.dumps({"choices": []}).encode("utf-8"),
+            ),
+        ]
+        handler = self._build_handler(
+            "POST",
+            "/v1/chat/completions",
+            body=json.dumps({"messages": [{"role": "user", "content": "hi"}]}),
+            headers={
+                "Origin": "https://image.usfan.net",
+                "Content-Type": "application/json",
+                "Authorization": "Bearer site-demo-a",
+                "X-Client-Trace-Id": VALID_TRACE_ID,
+            },
+        )
+
+        stderr = StringIO()
+        with redirect_stderr(stderr):
+            handler.do_POST()
+
+        rows = handler.server.audit_store.list_recent_events(limit=1)
+        self.assertEqual(handler.sent_status, 200)
+        self.assertEqual(mocked_forward_request.call_count, 2)
+        self.assertEqual(rows[0]["request_model"], "gemini-3.1-pro-preview")
+        self.assertEqual(
+            rows[0]["attempted_models"],
+            ["gemini-3-flash-preview", "gemini-3.1-pro-preview"],
+        )
+        log_output = stderr.getvalue()
+        self.assertIn('"phase": "try"', log_output)
+        self.assertIn('"phase": "fallback"', log_output)
+        self.assertIn('"phase": "success"', log_output)
+
+    @patch("site_gateway.server.forward_request")
+    def test_non_retriable_failure_does_not_fall_back(self, mocked_forward_request) -> None:
+        mocked_forward_request.return_value = UpstreamResponse(
+            status_code=400,
+            headers={"Content-Type": "application/json"},
+            body=json.dumps({"error": "bad request"}).encode("utf-8"),
+        )
+        handler = self._build_handler(
+            "POST",
+            "/v1/chat/completions",
+            body=json.dumps({"messages": [{"role": "user", "content": "hi"}]}),
+            headers={
+                "Origin": "https://image.usfan.net",
+                "Content-Type": "application/json",
+                "Authorization": "Bearer site-demo-a",
+                "X-Client-Trace-Id": VALID_TRACE_ID,
+            },
+        )
+
+        handler.do_POST()
+
+        rows = handler.server.audit_store.list_recent_events(limit=1)
+        self.assertEqual(handler.sent_status, 400)
+        self.assertEqual(mocked_forward_request.call_count, 1)
+        self.assertEqual(rows[0]["attempted_models"], ["gemini-3-flash-preview"])
+
+    @patch("site_gateway.server.forward_request")
+    def test_explicit_model_does_not_use_default_chain(self, mocked_forward_request) -> None:
+        mocked_forward_request.return_value = UpstreamResponse(
+            status_code=200,
+            headers={"Content-Type": "application/json"},
+            body=json.dumps({"choices": []}).encode("utf-8"),
+        )
+        handler = self._build_handler(
+            "POST",
+            "/v1/chat/completions",
+            body=json.dumps(
+                {
+                    "model": "gemini-2.5-pro",
+                    "messages": [{"role": "user", "content": "hi"}],
+                }
+            ),
+            headers={
+                "Origin": "https://image.usfan.net",
+                "Content-Type": "application/json",
+                "Authorization": "Bearer site-demo-a",
+                "X-Client-Trace-Id": VALID_TRACE_ID,
+            },
+        )
+
+        handler.do_POST()
+
+        rows = handler.server.audit_store.list_recent_events(limit=1)
+        self.assertEqual(handler.sent_status, 200)
+        self.assertEqual(mocked_forward_request.call_count, 1)
+        self.assertEqual(rows[0]["request_model"], "gemini-2.5-pro")
+        self.assertEqual(rows[0]["attempted_models"], ["gemini-2.5-pro"])
+
+    @patch("site_gateway.server.forward_request")
+    def test_multimodal_attempt_log_includes_input_image_count(self, mocked_forward_request) -> None:
+        mocked_forward_request.return_value = UpstreamResponse(
+            status_code=200,
+            headers={"Content-Type": "application/json"},
+            body=json.dumps({"choices": []}).encode("utf-8"),
+        )
+        handler = self._build_handler(
+            "POST",
+            "/v1/chat/completions",
+            body=json.dumps(
+                {
+                    "messages": [
+                        {"role": "system", "content": "Return strict JSON."},
+                        {
+                            "role": "user",
+                            "content": [
+                                {"type": "text", "text": "analyze this product"},
+                                {
+                                    "type": "image_url",
+                                    "image_url": {
+                                        "url": "data:image/jpeg;base64,AAA",
+                                        "detail": "high",
+                                    },
+                                },
+                            ],
+                        },
+                    ]
+                }
+            ),
+            headers={
+                "Origin": "https://image.usfan.net",
+                "Content-Type": "application/json",
+                "Authorization": "Bearer site-demo-a",
+                "X-Client-Trace-Id": VALID_TRACE_ID,
+            },
+        )
+
+        stderr = StringIO()
+        with redirect_stderr(stderr):
+            handler.do_POST()
+
+        self.assertEqual(handler.sent_status, 200)
+        self.assertIn('"input_image_count": 1', stderr.getvalue())
 
     @patch("site_gateway.server.forward_request")
     def test_audit_write_failure_does_not_break_success_response(self, mocked_forward_request) -> None:
