@@ -1,0 +1,27 @@
+# Ralph Progress Log
+Started: 2026-04-05
+---
+
+## Codebase Patterns
+- `site-gateway` 适合只做站点鉴权、路由决策和轻量审计；不要把统计真值继续塞回 `One-API` 面板链路里。
+- 面向令牌的统计不要存明文 token；保留 `preview + fingerprint` 就够做聚合和排障。
+- 分钟级、模型级、站点级统计都应该从同一张原始事件表聚合，不再维护第二份“汇总真值”。
+
+## 2026-04-05 03:45 - US-001/US-002/US-003
+- 实现了 `site-gateway` 的 SQLite 审计落库，覆盖成功与失败两类 POST 请求
+- 新增分钟级、站点级、令牌级、模型级统计查询，以及本地读取脚本 `scripts/read_audit.py`
+- 接入了 `SITE_GATEWAY_AUDIT_DB` 默认路径和 Docker 持久目录
+- Files changed:
+  - `src/site_gateway/audit.py`
+  - `src/site_gateway/server.py`
+  - `src/site_gateway/__init__.py`
+  - `tests/test_site_gateway_audit.py`
+  - `tests/test_site_gateway_contract.py`
+  - `scripts/read_audit.py`
+  - `.env.example`
+  - `docker-compose.yml`
+  - `prd.json`
+- **Learnings for future iterations:**
+  - `site-gateway` 的错误路径同样要记账，不然最需要排障的时候恰好没记录。
+  - `images` 请求当前更稳定的真值是“请求次数 + 返回图片数”；不要假造 token usage。
+---

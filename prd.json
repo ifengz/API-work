@@ -1,0 +1,49 @@
+{
+  "project": "API-work",
+  "branchName": "main",
+  "description": "Add site-gateway audit logging with minute-level and dimension summaries, then prove it with tests.",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Persist gateway request audit events",
+      "description": "As an operator, I need every gateway request to leave a durable audit event so I can trace site, token, model, status, and latency even when One API is not in the execution path.",
+      "acceptanceCriteria": [
+        "site-gateway writes one durable event for every POST request, including both success and handled failure paths",
+        "event fields include trace_id, site_name, masked token identity, request kind, requested/upstream model, upstream name, status_code, error_code, and duration_ms",
+        "chat responses store usage totals when the upstream returns usage",
+        "image responses store returned item count when the upstream returns a data array",
+        "Tests fail first and then pass"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-002",
+      "title": "Support minute-level and dimension summaries",
+      "description": "As an operator, I need recomputable summaries by minute, site, token, and model from the same audit truth so I can answer traffic questions without relying on the One API panel.",
+      "acceptanceCriteria": [
+        "SQLite-backed audit store can return total counts and per-minute counts for a recent window",
+        "SQLite-backed audit store can summarize by site_name, token identity, and request_model",
+        "Summary output includes request counts, success counts, failure counts, total tokens when available, and image counts when available",
+        "Tests fail first and then pass"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-003",
+      "title": "Expose a minimal audit reader",
+      "description": "As an operator, I need a simple local command to read recent events and summaries from the audit store so I can inspect traffic without touching the database manually.",
+      "acceptanceCriteria": [
+        "Repository includes a small read script for recent rows, minute counts, and grouped summaries",
+        "Docker and env defaults point site-gateway at a persistent audit database path",
+        "Full project test suite passes after the change"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": ""
+    }
+  ]
+}

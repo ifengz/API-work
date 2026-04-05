@@ -7,12 +7,15 @@ import unittest
 from email.message import Message
 from io import BytesIO
 from pathlib import Path
+from unittest.mock import patch
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
+from site_gateway.audit import AuditStore
 from site_gateway.config import ConfigError, load_gateway_config
 from site_gateway.policy import GatewayPolicy
 from site_gateway.server import SiteGatewayHandler
+from site_gateway.upstream import UpstreamResponse
 
 
 VALID_TRACE_ID = "018f2f4e-5d1d-7c6a-b4fa-9d6c44f3a7ad"
@@ -80,6 +83,7 @@ class SiteGatewayContractTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temp_dir = tempfile.TemporaryDirectory()
         self.config_path = Path(self.temp_dir.name) / "gateway.json"
+        self.audit_path = Path(self.temp_dir.name) / "audit.db"
         self.config_path.write_text(
             json.dumps(CONFIG_TEMPLATE, ensure_ascii=False, indent=2),
             encoding="utf-8",
@@ -242,6 +246,65 @@ class SiteGatewayContractTests(unittest.TestCase):
         self.assertEqual(payload["error"]["code"], "MODEL_NOT_ALLOWED")
         self.assertEqual(payload["error"]["trace_id"], VALID_TRACE_ID)
 
+    @patch("site_gateway.server.forward_request")
+    def test_successful_post_is_written_to_audit_store(self, mocked_forward_request) -> None:
+        mocked_forward_request.return_value = UpstreamResponse(
+            status_code=200,
+            headers={"Content-Type": "application/json"},
+            body=json.dumps(
+                {
+                    "id": "chatcmpl-test",
+                    "choices": [],
+                    "usage": {
+                        "prompt_tokens": 12,
+                        "completion_tokens": 8,
+                        "total_tokens": 20,
+                    },
+                }
+            ).encode("utf-8"),
+        )
+        handler = self._build_handler(
+            "POST",
+            "/v1/chat/completions",
+            body=json.dumps({"messages": [{"role": "user", "content": "hi"}]}),
+            headers={
+                "Origin": "https://image.usfan.net",
+                "Content-Type": "application/json",
+                "Authorization": "Bearer site-demo-a",
+                "X-Client-Trace-Id": VALID_TRACE_ID,
+            },
+        )
+
+        handler.do_POST()
+
+        rows = handler.server.audit_store.list_recent_events(limit=1)
+        self.assertEqual(handler.sent_status, 200)
+        self.assertEqual(rows[0]["trace_id"], VALID_TRACE_ID)
+        self.assertEqual(rows[0]["site_name"], "demo-a")
+        self.assertEqual(rows[0]["request_model"], "gemini-2.5-flash")
+        self.assertEqual(rows[0]["upstream_name"], "litellm")
+        self.assertEqual(rows[0]["status_code"], 200)
+        self.assertEqual(rows[0]["total_tokens"], 20)
+
+    def test_handled_failure_is_written_to_audit_store(self) -> None:
+        handler = self._build_handler(
+            "POST",
+            "/v1/chat/completions",
+            body=json.dumps({"messages": [{"role": "user", "content": "hi"}]}),
+            headers={
+                "Origin": "https://image.usfan.net",
+                "Content-Type": "application/json",
+                "Authorization": "Bearer site-demo-a",
+            },
+        )
+
+        handler.do_POST()
+
+        rows = handler.server.audit_store.list_recent_events(limit=1)
+        self.assertEqual(rows[0]["status_code"], 400)
+        self.assertEqual(rows[0]["error_code"], "BAD_REQUEST")
+        self.assertEqual(rows[0]["site_token_fingerprint"] is not None, True)
+
     def _build_handler(
         self,
         method: str,
@@ -258,6 +321,7 @@ class SiteGatewayContractTests(unittest.TestCase):
             {
                 "config": config,
                 "policy": GatewayPolicy(config),
+                "audit_store": AuditStore(self.audit_path),
             },
         )()
         handler.command = method

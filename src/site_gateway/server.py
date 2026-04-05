@@ -6,13 +6,15 @@ import re
 import secrets
 import sys
 import time
+from datetime import UTC, datetime
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
+from .audit import AuditEvent, AuditStore, build_token_identity, extract_response_usage, get_audit_db_path
 from .config import ConfigError, GatewayConfig, load_gateway_config
 from .policy import GatewayPolicy, PolicyError
-from .upstream import ProxyError, forward_request
+from .upstream import ProxyError, UpstreamResponse, forward_request
 
 
 PUBLIC_PROXY_PATHS = {
@@ -49,6 +51,7 @@ class SiteGatewayServer(ThreadingHTTPServer):
         super().__init__((config.listen_host, config.listen_port), SiteGatewayHandler)
         self.config = config
         self.policy = GatewayPolicy(config)
+        self.audit_store = AuditStore(get_audit_db_path(os.environ.get("SITE_GATEWAY_AUDIT_DB")))
 
 
 class SiteGatewayHandler(BaseHTTPRequestHandler):
@@ -115,10 +118,27 @@ class SiteGatewayHandler(BaseHTTPRequestHandler):
             )
 
     def do_POST(self) -> None:
+        started_at = time.monotonic_ns()
+        created_at = _utc_now()
         self._trace_id = _new_trace_id()
         cors_origin = self._current_allowed_origin()
+        request_kind = PUBLIC_PROXY_PATHS.get(self.path)
+        audit_fields = {
+            "site_name": None,
+            "site_token_preview": None,
+            "site_token_fingerprint": None,
+            "request_kind": request_kind,
+            "request_model": None,
+            "upstream_name": None,
+            "upstream_model": None,
+            "status_code": HTTPStatus.NOT_FOUND,
+            "error_code": None,
+            "prompt_tokens": None,
+            "completion_tokens": None,
+            "total_tokens": None,
+            "image_count": None,
+        }
         try:
-            request_kind = PUBLIC_PROXY_PATHS.get(self.path)
             if request_kind is None:
                 raise RequestError(
                     HTTPStatus.NOT_FOUND,
@@ -129,18 +149,78 @@ class SiteGatewayHandler(BaseHTTPRequestHandler):
                 )
 
             site_token = self._extract_site_token()
+            token_preview, token_fingerprint = build_token_identity(site_token)
+            audit_fields["site_token_preview"] = token_preview
+            audit_fields["site_token_fingerprint"] = token_fingerprint
             self._trace_id = self._require_trace_id()
             payload = self._read_json()
+            audit_fields["request_model"] = _as_str(payload.get("model"))
             self._reject_payload_site_token(payload)
             cors_origin = self._require_site_origin(site_token)
-            self._handle_proxy(request_kind, payload, site_token, cors_origin)
+            decision, response = self._handle_proxy(request_kind, payload, site_token)
+            usage = extract_response_usage(
+                response.body,
+                response.headers.get("Content-Type", "application/json"),
+            )
+            audit_fields.update(
+                {
+                    "site_name": decision.site_name,
+                    "request_model": decision.request_model,
+                    "upstream_name": decision.upstream_name,
+                    "upstream_model": decision.upstream_model,
+                    "status_code": response.status_code,
+                    "prompt_tokens": usage.prompt_tokens,
+                    "completion_tokens": usage.completion_tokens,
+                    "total_tokens": usage.total_tokens,
+                    "image_count": usage.image_count,
+                }
+            )
+            if response.status_code >= 400:
+                raise RequestError(
+                    _map_upstream_status(response.status_code),
+                    "UPSTREAM_UNAVAILABLE",
+                    "upstream request failed",
+                    cors_origin=cors_origin,
+                    trace_id=self._trace_id,
+                )
+            content_type = response.headers.get("Content-Type", "application/json")
+            self._send_body(
+                HTTPStatus(response.status_code),
+                response.body,
+                content_type=content_type,
+                cors_origin=cors_origin,
+                trace_id=self._trace_id,
+            )
         except RequestError as exc:
+            audit_fields["status_code"] = int(exc.status)
+            audit_fields["error_code"] = exc.code
             self._send_error(
                 exc.status,
                 exc.code,
                 exc.message,
                 cors_origin=exc.cors_origin,
                 trace_id=exc.trace_id or self._trace_id,
+            )
+        finally:
+            self.server.audit_store.record_event(
+                AuditEvent(
+                    created_at=created_at,
+                    trace_id=self._trace_id,
+                    site_name=audit_fields["site_name"],
+                    site_token_preview=audit_fields["site_token_preview"],
+                    site_token_fingerprint=audit_fields["site_token_fingerprint"],
+                    request_kind=audit_fields["request_kind"],
+                    request_model=audit_fields["request_model"],
+                    upstream_name=audit_fields["upstream_name"],
+                    upstream_model=audit_fields["upstream_model"],
+                    status_code=int(audit_fields["status_code"]),
+                    error_code=audit_fields["error_code"],
+                    duration_ms=_elapsed_milliseconds(started_at),
+                    prompt_tokens=audit_fields["prompt_tokens"],
+                    completion_tokens=audit_fields["completion_tokens"],
+                    total_tokens=audit_fields["total_tokens"],
+                    image_count=audit_fields["image_count"],
+                )
             )
 
     def log_message(self, format: str, *args: object) -> None:
@@ -151,8 +231,8 @@ class SiteGatewayHandler(BaseHTTPRequestHandler):
         request_kind: str,
         payload: dict[str, object],
         site_token: str,
-        cors_origin: str | None,
-    ) -> None:
+    ) -> tuple[object, UpstreamResponse]:
+        cors_origin = self._current_allowed_origin()
         try:
             decision = self.server.policy.resolve(
                 site_token,
@@ -170,24 +250,7 @@ class SiteGatewayHandler(BaseHTTPRequestHandler):
                 cors_origin=cors_origin,
                 trace_id=self._trace_id,
             ) from exc
-
-        if response.status_code >= 400:
-            raise RequestError(
-                _map_upstream_status(response.status_code),
-                "UPSTREAM_UNAVAILABLE",
-                "upstream request failed",
-                cors_origin=cors_origin,
-                trace_id=self._trace_id,
-            )
-
-        content_type = response.headers.get("Content-Type", "application/json")
-        self._send_body(
-            HTTPStatus(response.status_code),
-            response.body,
-            content_type=content_type,
-            cors_origin=cors_origin,
-            trace_id=self._trace_id,
-        )
+        return decision, response
 
     def _read_json(self) -> dict[str, object]:
         content_length = int(self.headers.get("Content-Length", "0"))
@@ -430,6 +493,15 @@ def _new_trace_id() -> str:
         f"{0x80 | ((rand_b >> 56) & 0x3f):02x}{(rand_b >> 48) & 0xff:02x}-"
         f"{rand_b & ((1 << 48) - 1):012x}"
     )
+
+
+def _elapsed_milliseconds(started_at: int) -> int:
+    elapsed_ns = time.monotonic_ns() - started_at
+    return max(0, elapsed_ns // 1_000_000)
+
+
+def _utc_now() -> datetime:
+    return datetime.now(UTC)
 
 
 def main(argv: list[str] | None = None) -> int:

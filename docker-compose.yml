@@ -9,10 +9,12 @@ services:
       - .env
     environment:
       SITE_GATEWAY_CONFIG: /app/config/gateway.json
+      SITE_GATEWAY_AUDIT_DB: ${SITE_GATEWAY_AUDIT_DB}
     ports:
       - "8080:8080"
     volumes:
       - ./config/gateway.json:/app/config/gateway.json:ro
+      - ./data/site-gateway:/data/site-gateway
     depends_on:
       - one-api
       - litellm
