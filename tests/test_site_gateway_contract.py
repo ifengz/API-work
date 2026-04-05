@@ -4,7 +4,9 @@ import json
 import sys
 import tempfile
 import unittest
+from contextlib import redirect_stderr
 from email.message import Message
+from io import StringIO
 from io import BytesIO
 from pathlib import Path
 from unittest.mock import patch
@@ -285,6 +287,35 @@ class SiteGatewayContractTests(unittest.TestCase):
         self.assertEqual(rows[0]["upstream_name"], "litellm")
         self.assertEqual(rows[0]["status_code"], 200)
         self.assertEqual(rows[0]["total_tokens"], 20)
+
+    @patch("site_gateway.server.forward_request")
+    def test_audit_write_failure_does_not_break_success_response(self, mocked_forward_request) -> None:
+        class BrokenAuditStore:
+            def record_event(self, event) -> None:
+                raise RuntimeError("sqlite write failed")
+
+        mocked_forward_request.return_value = UpstreamResponse(
+            status_code=200,
+            headers={"Content-Type": "application/json"},
+            body=json.dumps({"choices": []}).encode("utf-8"),
+        )
+        handler = self._build_handler(
+            "POST",
+            "/v1/chat/completions",
+            body=json.dumps({"messages": [{"role": "user", "content": "hi"}]}),
+            headers={
+                "Origin": "https://image.usfan.net",
+                "Content-Type": "application/json",
+                "Authorization": "Bearer site-demo-a",
+                "X-Client-Trace-Id": VALID_TRACE_ID,
+            },
+        )
+        handler.server.audit_store = BrokenAuditStore()
+
+        with redirect_stderr(StringIO()):
+            handler.do_POST()
+
+        self.assertEqual(handler.sent_status, 200)
 
     def test_handled_failure_is_written_to_audit_store(self) -> None:
         handler = self._build_handler(

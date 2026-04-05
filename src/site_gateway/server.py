@@ -202,7 +202,7 @@ class SiteGatewayHandler(BaseHTTPRequestHandler):
                 trace_id=exc.trace_id or self._trace_id,
             )
         finally:
-            self.server.audit_store.record_event(
+            self._record_audit_event(
                 AuditEvent(
                     created_at=created_at,
                     trace_id=self._trace_id,
@@ -225,6 +225,15 @@ class SiteGatewayHandler(BaseHTTPRequestHandler):
 
     def log_message(self, format: str, *args: object) -> None:
         return
+
+    def _record_audit_event(self, event: AuditEvent) -> None:
+        try:
+            self.server.audit_store.record_event(event)
+        except Exception as exc:
+            print(
+                f"audit write failed trace_id={event.trace_id}: {exc}",
+                file=sys.stderr,
+            )
 
     def _handle_proxy(
         self,
