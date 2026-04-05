@@ -189,6 +189,16 @@
 - 已在模型尝试日志增加 `input_image_count`，后续线上 trace 能直接看出这次请求到底有没有带图。
 - 已完成本地回归：`python3 -m unittest discover -s tests` -> `38 tests OK`，`python3 scripts/check_project.py` 通过，`git diff --check` 通过。
 - 对应 `task_issue` 已收口成“已实现，待验收”。
+
+## 2026-04-06 推送与线上重启进度
+
+- 已将当前修复提交为 `67ad0d0` 并推到 `origin/main`。
+- 推送时只纳入了跟踪文件改动，未带上未跟踪的 `IMAGE_USFAN_API_WORK_REFACTOR_REVIEW.md` 和本地 `vertex/` 目录。
+- 线上重启仍被权限阻塞：
+  - `ssh -o BatchMode=yes root@api-work.usfan.net ...` -> `Permission denied (password)`
+  - `ssh -o BatchMode=yes root@38.246.250.228 ...` -> `Permission denied (password)`
+  - `browser-use/list_browser_profiles` -> `Transport closed`
+- 结论：代码已上 GitHub，但这次会话还不能替用户在宝塔线上执行 `git pull + docker compose up -d --build site-gateway`。
 - 当前收口：
   - `8080` 公网入口已恢复到一期合同状态
   - 其他项目要接入时，必须同时满足三件事：`Authorization Bearer site_token`、合法 `X-Client-Trace-Id`、image 模型名走白名单或直接不传
