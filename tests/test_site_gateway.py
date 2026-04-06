@@ -31,23 +31,28 @@ CONFIG_TEMPLATE = {
     "model_routes": {
         "gemini-3-flash-preview": {
             "upstream": "litellm",
-            "upstream_model": "gemini-3-flash-preview"
+            "upstream_model": "gemini-3-flash-preview",
+            "multimodal_chat_upstream": "one_api"
         },
         "gemini-3.1-pro-preview": {
             "upstream": "litellm",
-            "upstream_model": "gemini-3.1-pro-preview"
+            "upstream_model": "gemini-3.1-pro-preview",
+            "multimodal_chat_upstream": "one_api"
         },
         "gemini-3.1-flash-lite-preview": {
             "upstream": "litellm",
-            "upstream_model": "gemini-3.1-flash-lite-preview"
+            "upstream_model": "gemini-3.1-flash-lite-preview",
+            "multimodal_chat_upstream": "one_api"
         },
         "gemini-2.5-pro": {
             "upstream": "litellm",
-            "upstream_model": "gemini-2.5-pro"
+            "upstream_model": "gemini-2.5-pro",
+            "multimodal_chat_upstream": "one_api"
         },
         "gemini-2.5-flash": {
             "upstream": "litellm",
-            "upstream_model": "gemini-2.5-flash"
+            "upstream_model": "gemini-2.5-flash",
+            "multimodal_chat_upstream": "one_api"
         },
         "gemini-3-pro-image-preview": {
             "upstream": "litellm",
@@ -202,6 +207,28 @@ class SiteGatewayTests(unittest.TestCase):
     def test_explicit_model_skips_default_candidates(self) -> None:
         decisions = self.policy.resolve_candidates("site-demo-a", "gemini-2.5-pro", "chat")
         self.assertEqual([decision.request_model for decision in decisions], ["gemini-2.5-pro"])
+
+    def test_multimodal_chat_uses_route_override(self) -> None:
+        decision = self.policy.resolve("site-demo-a", "gemini-2.5-flash", "chat")
+
+        overridden = self.policy.resolve_multimodal_chat_decision(
+            decision,
+            input_image_count=1,
+        )
+
+        self.assertEqual(overridden.upstream_name, "one_api")
+        self.assertEqual(overridden.upstream_url, "http://one-api:3000/v1/chat/completions")
+        self.assertEqual(overridden.upstream_model, "gemini-2.5-flash")
+
+    def test_text_only_chat_keeps_primary_upstream(self) -> None:
+        decision = self.policy.resolve("site-demo-a", "gemini-2.5-flash", "chat")
+
+        kept = self.policy.resolve_multimodal_chat_decision(
+            decision,
+            input_image_count=0,
+        )
+
+        self.assertEqual(kept.upstream_name, "litellm")
 
     def test_upstream_request_overrides_model_and_preserves_headers(self) -> None:
         decision = self.policy.resolve("site-demo-a", "gpt-4o-mini", "chat")

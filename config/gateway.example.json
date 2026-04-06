@@ -20,15 +20,18 @@
   "model_routes": {
     "gemini-3-flash-preview": {
       "upstream": "litellm",
-      "upstream_model": "gemini-3-flash-preview"
+      "upstream_model": "gemini-3-flash-preview",
+      "multimodal_chat_upstream": "one_api"
     },
     "gemini-3.1-pro-preview": {
       "upstream": "litellm",
-      "upstream_model": "gemini-3.1-pro-preview"
+      "upstream_model": "gemini-3.1-pro-preview",
+      "multimodal_chat_upstream": "one_api"
     },
     "gemini-3.1-flash-lite-preview": {
       "upstream": "litellm",
-      "upstream_model": "gemini-3.1-flash-lite-preview"
+      "upstream_model": "gemini-3.1-flash-lite-preview",
+      "multimodal_chat_upstream": "one_api"
     },
     "gemini-3-pro-image-preview": {
       "upstream": "litellm",
@@ -40,11 +43,13 @@
     },
     "gemini-2.5-flash": {
       "upstream": "litellm",
-      "upstream_model": "gemini-2.5-flash"
+      "upstream_model": "gemini-2.5-flash",
+      "multimodal_chat_upstream": "one_api"
     },
     "gemini-2.5-pro": {
       "upstream": "litellm",
-      "upstream_model": "gemini-2.5-pro"
+      "upstream_model": "gemini-2.5-pro",
+      "multimodal_chat_upstream": "one_api"
     },
     "gemini-2.5-flash-image": {
       "upstream": "litellm",

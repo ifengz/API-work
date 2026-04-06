@@ -28,6 +28,8 @@ class UpstreamConfig:
 class ModelRoute:
     upstream: str
     upstream_model: str
+    multimodal_chat_upstream: str | None = None
+    multimodal_chat_upstream_model: str | None = None
 
 
 @dataclass(frozen=True)
@@ -96,6 +98,10 @@ def load_gateway_config(path: str | Path) -> GatewayConfig:
         model_name: ModelRoute(
             upstream=value["upstream"],
             upstream_model=value.get("upstream_model", model_name),
+            multimodal_chat_upstream=value.get("multimodal_chat_upstream"),
+            multimodal_chat_upstream_model=value.get(
+                "multimodal_chat_upstream_model"
+            ),
         )
         for model_name, value in raw.get("model_routes", {}).items()
     }
@@ -104,6 +110,15 @@ def load_gateway_config(path: str | Path) -> GatewayConfig:
         if route.upstream not in upstreams:
             raise ConfigError(
                 f"model route '{model_name}' points to unknown upstream '{route.upstream}'"
+            )
+        if (
+            route.multimodal_chat_upstream is not None
+            and route.multimodal_chat_upstream not in upstreams
+        ):
+            raise ConfigError(
+                "model route "
+                f"'{model_name}' points to unknown multimodal_chat_upstream "
+                f"'{route.multimodal_chat_upstream}'"
             )
 
     sites: dict[str, SiteConfig] = {}

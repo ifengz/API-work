@@ -91,6 +91,38 @@ class GatewayPolicy:
             extra_headers=site.extra_headers,
         )
 
+    def resolve_multimodal_chat_decision(
+        self,
+        decision: RoutingDecision,
+        *,
+        input_image_count: int,
+    ) -> RoutingDecision:
+        if decision.request_kind != "chat" or input_image_count < 1:
+            return decision
+
+        route = self.config.model_routes.get(decision.request_model)
+        if route is None or route.multimodal_chat_upstream is None:
+            return decision
+
+        try:
+            upstream = self.config.get_upstream(route.multimodal_chat_upstream)
+        except ConfigError as exc:
+            raise PolicyError(str(exc)) from exc
+
+        return RoutingDecision(
+            site_token=decision.site_token,
+            site_name=decision.site_name,
+            request_kind=decision.request_kind,
+            request_model=decision.request_model,
+            upstream_name=upstream.name,
+            upstream_model=route.multimodal_chat_upstream_model
+            or decision.request_model,
+            upstream_url=upstream.url_for("chat"),
+            upstream_api_key_env=upstream.api_key_env,
+            timeout_seconds=upstream.timeout_seconds,
+            extra_headers=decision.extra_headers,
+        )
+
     @staticmethod
     def _resolve_model_names(
         site: SiteConfig,

@@ -288,3 +288,60 @@
   - `python3 -m unittest discover -s tests` -> `36 tests OK`
   - `python3 scripts/check_project.py` -> `project skeleton looks consistent`
   - `git diff --check` -> 通过
+
+### 2026-04-06 宝塔终端重启新进展
+- 已按用户要求改用 `agent-browser` 登录宝塔：
+  - 登录地址：`https://38.246.250.228:42668/26f57c78`
+  - 登录账号：`hfurxxqw`
+  - 已成功进入 `https://38.246.250.228:42668/xterm`
+- 首次执行：
+  - `cd /www/wwwroot/API-work && git pull --ff-only origin main && docker compose up -d --build site-gateway ...`
+- 首次真实阻塞点：
+  - `git pull --ff-only origin main` 被服务器本地改动拦住，报 `Your local changes ... would be overwritten by merge`
+  - 现场提示会冲突的文件：`config/gateway.example.json`、`src/site_gateway/config.py`、`src/site_gateway/policy.py`、`src/site_gateway/server.py`、`src/site_gateway/upstream.py`
+  - 后续 `git status --short` 还看到：
+    - `M scripts/check_project.py`
+    - `D tests/test_build_litellm_config.py`
+    - `D tests/test_site_gateway.py`
+    - `D tests/test_vertex_import.py`
+    - `D tests/test_vertex_pool_builder.py`
+    - `D tests/test_vertex_pool_example.py`
+    - `?? vertex/`
+- 经用户确认后，已先备份再清场：
+  - 备份目录：`/root/api-work-backup-20260405-173949/`
+  - 备份内容：`status.txt`、`worktree.patch`、`vertex.tgz`
+  - 备份索引：`/root/api-work-last-backup.txt`
+  - 已执行：`git stash push -u -m "pre-deploy-backup-20260405-173949"`
+- 已完成线上更新：
+  - `git pull --ff-only origin main` 成功
+  - `docker compose up -d --build site-gateway` 成功
+  - `docker compose ps site-gateway` 显示容器 `Up`
+  - 再次执行 `curl -i http://127.0.0.1:8080/healthz` 返回 `HTTP/1.1 200 OK` 与 `{"status":"ok"}`
+- stash 检查结果：
+  - `stash@{0}: pre-deploy-backup-20260405-173949`
+  - `git stash show --stat stash@{0}` 显示：`11 files changed, 529 insertions(+), 427 deletions(-)`
+- 当前结论：
+  - 线上服务已经基于最新 `main` 正常启动
+  - 之前服务器本地那批改动已经可以恢复，但不应该直接整包恢复回运行目录；后续只应从 `stash@{0}` 或备份目录里做选择性提取
+
+### 2026-04-06 线上 Gemini 带图分析继续打通
+- 先回看 `lessons.md`，按仓库约束继续本轮真链路排障。
+- 用公网固定入口而不是页面现象做判断：
+  - 入口：`http://api-work.usfan.net:8080/v1/chat/completions`
+  - 站点 token：`site-demo-a`
+  - 头部：`Origin: https://image.usfan.net`、`X-Client-Trace-Id: 019d5e0f-97f6-7c92-ba43-7358b3461148`
+  - 请求体：`messages[].content = [text, image_url(data URL)]`
+- 当前线上真实结果：
+  - 返回 `HTTP 503`
+  - 回包正文：`{"error":{"code":"UPSTREAM_UNAVAILABLE","message":"upstream request failed","trace_id":"019d5e0f-97f6-7c92-ba43-7358b3461148"}}`
+- 由此确认：
+  - 线上当前版本依旧没有接住 Gemini 多模态 `chat`
+  - 这次故障点不在前端 payload、不在 CORS、不在 trace id、不在站点 token
+- 本地已补最小修法：
+  - 在 `model_routes` 上增加显式 `multimodal_chat_upstream`
+  - 当 `request_kind=chat` 且 `input_image_count>0` 时，按配置把 Gemini 带图 chat 切到显式上游
+  - 纯文字 chat 继续走原主上游，不改现有 text-only 行为
+- 本地验证结果：
+  - `python3 -m unittest discover -s tests` => `40 tests OK`
+  - `python3 scripts/check_project.py` => `project skeleton looks consistent`
+  - `git diff --check` => 通过

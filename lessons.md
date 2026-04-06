@@ -22,3 +22,4 @@
 20. `site-gateway` 的公网 smoke 不能只带 `Authorization`，正式 `POST` 还必须带合法 `X-Client-Trace-Id`；少这个头时看到的 `400` 不是 token 问题。
 21. 生图验收优先按一期合同走默认模型；若显式传模型，必须用白名单里的 `gemini-2.5-flash-image`，不能拿 `*-preview` 名字去打公网合同。
 22. 审计、统计这类旁路能力必须和主请求物理解耦；写库失败只能显式报错日志，不能把 chat/image 主链路拖成 `500`。
+23. 判断“参考图有没有真的进后端请求”时，不能看 `data:image/...` 资源行，必须点真实的 `fetch/xhr` 请求并核对 `Payload`。

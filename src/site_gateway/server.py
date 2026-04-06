@@ -308,8 +308,12 @@ class SiteGatewayHandler(BaseHTTPRequestHandler):
         attempted_models: list[str] = []
         input_image_count = count_input_images(payload)
         total_attempts = len(decisions)
-        for attempt_index, decision in enumerate(decisions, start=1):
-            attempted_models.append(decision.request_model)
+        for attempt_index, initial_decision in enumerate(decisions, start=1):
+            attempted_models.append(initial_decision.request_model)
+            decision = self.server.policy.resolve_multimodal_chat_decision(
+                initial_decision,
+                input_image_count=input_image_count,
+            )
             self._emit_attempt_log(
                 "try",
                 decision,
