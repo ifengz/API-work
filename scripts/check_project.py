@@ -22,6 +22,7 @@ REQUIRED_FILES = [
     "src/site_gateway/server.py",
     "src/site_gateway/policy.py",
     "config/gateway.example.json",
+    "config/vertex-projects.allowlist",
     "config/litellm.example.yaml",
     "config/vertex-pool.example.json",
     "scripts/build_litellm_config.py",

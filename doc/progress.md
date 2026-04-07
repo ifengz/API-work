@@ -203,6 +203,28 @@
   - `8080` 公网入口已恢复到一期合同状态
   - 其他项目要接入时，必须同时满足三件事：`Authorization Bearer site_token`、合法 `X-Client-Trace-Id`、image 模型名走白名单或直接不传
 
+## 2026-04-07 线上 chat 修复续排
+
+- 重新用公网固定入口真测：
+  - `curl http://38.246.250.228:8080/healthz` 返回 `200`
+  - `POST http://38.246.250.228:8080/v1/chat/completions`（带合法 `site-demo-a` 与 `X-Client-Trace-Id`）仍返回 `403 UPSTREAM_UNAVAILABLE`
+- 进一步确认线上失配的第一性原理：
+  - 线上真正生效的是服务器本地 `config/gateway.json`、`config/vertex-pool.json`、`config/litellm.generated.yaml`
+  - 这三份文件都被 `.gitignore` 排除，不会随 `git pull` 更新
+  - `scripts/deploy-production.sh` 又会按服务器本地 `vertex/` 目录重建池配置，所以只要没有正式白名单，坏项目会反复卷回
+- 已在仓库内完成最小修补：
+  - 新增 `config/vertex-projects.allowlist`，默认只保留 `newwoo1`、`nodal-rex-492217-r2`、`slhww-492207`
+  - `scripts/deploy-production.sh` 与 `scripts/build_vertex_pool_from_dir.py` 现在会默认读取这份白名单文件
+  - `config/gateway.json` 与 `config/gateway.example.json` 移除了 Gemini chat 的 `multimodal_chat_upstream=one_api`
+  - 对应单测与合同测试已更新
+- 本地验证结果：
+  - `python3 -m unittest discover -s tests` -> `42 tests OK`
+  - `python3 scripts/check_project.py` -> `project skeleton looks consistent`
+  - `git diff --check` -> 通过
+- 当前卡点：
+  - 宝塔面板入口 `https://38.246.250.228:42668/26f57c78` 现在从本机会话连不上，`agent-browser` 与 `curl -k` 都报连接关闭/拒绝
+  - 这导致本轮还没法把新白名单部署到线上并做最终公网复验
+
 ## 2026-04-05
 
 ### 审计记录方案编排

@@ -73,6 +73,19 @@ def load_vertex_credentials(root: Path) -> list[VertexCredential]:
     return sorted(unique.values(), key=lambda item: (item.project_id, item.client_email))
 
 
+def load_projects_from_file(path: Path) -> set[str]:
+    projects: set[str] = set()
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.split("#", 1)[0].strip()
+        if not line:
+            continue
+        for part in line.split(","):
+            value = part.strip()
+            if value:
+                projects.add(value)
+    return projects
+
+
 def select_credentials(
     credentials: list[VertexCredential],
     projects: set[str] | None,
@@ -174,6 +187,7 @@ def parse_args() -> argparse.Namespace:
         help="credential directory path inside container, default follows output-credentials-dir",
     )
     parser.add_argument("--projects", default="", help="comma-separated project ids to include")
+    parser.add_argument("--projects-file", default="", help="newline or comma separated project ids file to include")
     parser.add_argument("--max-per-project", type=int, default=None, help="limit credentials per project")
     parser.add_argument("--location", default="global", help="vertex region, default global")
     parser.add_argument("--models", default=",".join(DEFAULT_VERTEX_MODELS), help="comma-separated model names")
@@ -182,7 +196,10 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = parse_args()
-    projects = {item.strip() for item in args.projects.split(",") if item.strip()} or None
+    projects = {item.strip() for item in args.projects.split(",") if item.strip()}
+    if not projects and args.projects_file:
+        projects = load_projects_from_file(Path(args.projects_file))
+    projects = projects or None
     models = [item.strip() for item in args.models.split(",") if item.strip()]
     if not models:
         raise SystemExit("models list cannot be empty")

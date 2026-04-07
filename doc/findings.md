@@ -122,3 +122,13 @@
 2. Vertex 官方 OpenAI 兼容口支持 `messages[].content[].image_url.url = data:image/...` 这类输入；因此“前端把图塞进 `image_url`”本身不构成硬错误。
 3. 当前前端固定带 `image_url.detail = "high"`；这类细节字段并不是 Vertex 这条兼容口的稳定合同，应在网关层清洗掉，不能原样赌上游全都认。
 4. 所以本轮最小正确修法不是改 prompt，也不是回滚前端，而是：`site-gateway` 在 Gemini 多模态 `chat` 转发前清洗 `image_url.detail`，并把输入图数量打印进尝试日志，先把兼容层和排障真相补齐。
+
+## 2026-04-07 线上 chat 仍 403 的新增根因
+1. 线上 `8080` 活着，不代表 `chat` 真能用；公网真测仍然是 `403/UPSTREAM_UNAVAILABLE`，说明坏点在 `site-gateway -> litellm -> Vertex` 这条执行链，不在入口存活。
+2. `config/gateway.json`、`config/vertex-pool.json`、`config/litellm.generated.yaml` 都被 `.gitignore` 排除，服务器 `git pull` 不会自动更新这三份运行时真值。
+3. `scripts/deploy-production.sh` 当前会按服务器本地 `vertex/` 目录重新生成池配置；如果不显式给项目白名单，坏项目会在每次部署时再次被卷回运行池。
+4. 宝塔现场已经证明：把 `ninth-generator-479604-s6` 排除出池后，运行时配置和容器日志仍可能失配；这说明“人工现场临时改文件”不够稳，必须把筛选条件变成受 Git 管的部署输入。
+5. 当前 One-API 路径也不能接这个锅：线上真测表明 `one-api` 对这批 Gemini chat 模型缺 `model ratio / adaptor`，所以 Gemini chat 不能再靠 `multimodal_chat_upstream=one_api` 兜底。
+6. 本轮正确收口是两件事：
+   - Gemini chat（含多模态）默认都只走 `litellm`
+   - Vertex 项目白名单进入仓库，并由部署脚本默认读取，避免下次上线再把坏项目卷回来

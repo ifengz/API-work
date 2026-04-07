@@ -20,6 +20,7 @@ VERTEX_SOURCE_DIR="${VERTEX_SOURCE_DIR:-vertex}"
 VERTEX_POOL_FILE="${VERTEX_POOL_FILE:-config/vertex-pool.json}"
 VERTEX_CREDENTIALS_DIR="${VERTEX_CREDENTIALS_DIR:-credentials/imported}"
 VERTEX_PROJECTS="${VERTEX_PROJECTS:-}"
+VERTEX_PROJECTS_FILE="${VERTEX_PROJECTS_FILE:-config/vertex-projects.allowlist}"
 VERTEX_MAX_PER_PROJECT="${VERTEX_MAX_PER_PROJECT:-}"
 VERTEX_LOCATION="${VERTEX_LOCATION:-global}"
 VERTEX_MODELS="${VERTEX_MODELS:-}"
@@ -135,6 +136,8 @@ main() {
   )
   if [[ -n "$VERTEX_PROJECTS" ]]; then
     build_vertex_args+=(--projects "$VERTEX_PROJECTS")
+  elif [[ -f "$VERTEX_PROJECTS_FILE" ]]; then
+    build_vertex_args+=(--projects-file "$VERTEX_PROJECTS_FILE")
   fi
   if [[ -n "$VERTEX_MAX_PER_PROJECT" ]]; then
     build_vertex_args+=(--max-per-project "$VERTEX_MAX_PER_PROJECT")

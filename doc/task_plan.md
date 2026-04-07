@@ -220,6 +220,24 @@ LiteLLM = Vertex / Gemini 执行层
   <done>审计能留存，也能被查到</done>
 </task>
 
+## 2026-04-07 线上 chat 403 收口执行单
+
+<task type="tdd">
+  <name>把坏 Vertex 项目排除条件收口成受 Git 管配置</name>
+  <files>scripts/build_vertex_pool_from_dir.py, scripts/deploy-production.sh, scripts/deploy-production.env.example, config/vertex-projects.allowlist, tests/test_vertex_pool_builder.py</files>
+  <action>新增项目白名单文件与读取逻辑，让部署脚本在未显式传 `VERTEX_PROJECTS` 时默认按白名单重建 Vertex 池，避免服务器本地 `vertex/` 目录把坏项目重新卷回</action>
+  <verify>`python3 -m unittest tests.test_vertex_pool_builder` 通过；`python3 scripts/check_project.py` 通过</verify>
+  <done>下次部署不再依赖人工临时排除坏项目</done>
+</task>
+
+<task type="tdd">
+  <name>撤掉 Gemini 多模态 chat 的 one-api 误路由</name>
+  <files>config/gateway.json, config/gateway.example.json, tests/test_site_gateway.py, tests/test_site_gateway_contract.py</files>
+  <action>移除 Gemini chat 模型上的 `multimodal_chat_upstream=one_api`，让 text chat 和图文 chat 都只走 `litellm`</action>
+  <verify>`python3 -m unittest tests.test_site_gateway tests.test_site_gateway_contract` 通过</verify>
+  <done>Gemini chat 不再被 one-api 的 adaptor/model-ratio 缺口拖死</done>
+</task>
+
 <task type="auto">
   <name>补分钟级与维度汇总</name>
   <files>src/site_gateway/audit.py, scripts/read_audit.py</files>

@@ -40,27 +40,22 @@ CONFIG_TEMPLATE = {
         "gemini-3-flash-preview": {
             "upstream": "litellm",
             "upstream_model": "gemini-3-flash-preview",
-            "multimodal_chat_upstream": "one_api",
         },
         "gemini-3.1-pro-preview": {
             "upstream": "litellm",
             "upstream_model": "gemini-3.1-pro-preview",
-            "multimodal_chat_upstream": "one_api",
         },
         "gemini-3.1-flash-lite-preview": {
             "upstream": "litellm",
             "upstream_model": "gemini-3.1-flash-lite-preview",
-            "multimodal_chat_upstream": "one_api",
         },
         "gemini-2.5-pro": {
             "upstream": "litellm",
             "upstream_model": "gemini-2.5-pro",
-            "multimodal_chat_upstream": "one_api",
         },
         "gemini-2.5-flash": {
             "upstream": "litellm",
             "upstream_model": "gemini-2.5-flash",
-            "multimodal_chat_upstream": "one_api",
         },
         "gemini-3-pro-image-preview": {
             "upstream": "litellm",
@@ -484,7 +479,7 @@ class SiteGatewayContractTests(unittest.TestCase):
         self.assertEqual(handler.sent_status, 200)
         self.assertIn('"input_image_count": 1', stderr.getvalue())
         forwarded_decision = mocked_forward_request.call_args.args[0]
-        self.assertEqual(forwarded_decision.upstream_name, "one_api")
+        self.assertEqual(forwarded_decision.upstream_name, "litellm")
         self.assertEqual(forwarded_decision.upstream_model, "gemini-3-flash-preview")
 
     @patch("site_gateway.server.forward_request")

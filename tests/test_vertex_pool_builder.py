@@ -10,6 +10,7 @@ from scripts.build_vertex_pool_from_dir import (
     build_vertex_pool_config,
     copy_credentials,
     load_vertex_credentials,
+    load_projects_from_file,
     resolve_container_credentials_dir,
     select_credentials,
 )
@@ -62,6 +63,41 @@ class VertexPoolBuilderTests(unittest.TestCase):
         self.assertEqual(
             "/runtime/vertex",
             resolve_container_credentials_dir(Path("credentials/imported"), "/runtime/vertex"),
+        )
+
+    def test_load_projects_from_file_ignores_comments_and_blank_lines(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            projects_file = Path(temp_dir) / "projects.txt"
+            projects_file.write_text(
+                "# keep only stable projects\n"
+                "newwoo1\n"
+                "\n"
+                "nodal-rex-492217-r2, slhww-492207\n",
+                encoding="utf-8",
+            )
+
+            self.assertEqual(
+                {"newwoo1", "nodal-rex-492217-r2", "slhww-492207"},
+                load_projects_from_file(projects_file),
+            )
+
+    def test_select_credentials_respects_allowlist_from_file(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            write_json(root / "a.json", "ninth-generator-479604-s6", "svc-a@bad.iam.gserviceaccount.com")
+            write_json(root / "b.json", "newwoo1", "svc-b@newwoo1.iam.gserviceaccount.com")
+            write_json(root / "c.json", "slhww-492207", "svc-c@slhww.iam.gserviceaccount.com")
+
+            credentials = load_vertex_credentials(root)
+            selected = select_credentials(
+                credentials,
+                {"newwoo1", "slhww-492207"},
+                None,
+            )
+
+        self.assertEqual(
+            ["newwoo1", "slhww-492207"],
+            [credential.project_id for credential in selected],
         )
 
 
