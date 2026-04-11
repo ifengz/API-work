@@ -15,6 +15,13 @@
       "timeout_seconds": 120,
       "chat_path": "/v1/chat/completions",
       "image_path": "/v1/images/generations"
+    },
+    "ai_studio": {
+      "base_url": "https://generativelanguage.googleapis.com/v1beta/openai",
+      "api_key_env": "AI_STUDIO_API_KEY",
+      "timeout_seconds": 120,
+      "chat_path": "/chat/completions",
+      "image_path": "/images/generations"
     }
   },
   "model_routes": {
@@ -49,6 +56,10 @@
     "gemini-2.5-flash-image": {
       "upstream": "litellm",
       "upstream_model": "gemini-2.5-flash-image"
+    },
+    "imagen-3.0-generate-002": {
+      "upstream": "ai_studio",
+      "upstream_model": "imagen-3.0-generate-002"
     },
     "gpt-4o-mini": {
       "upstream": "one_api",
@@ -156,6 +167,36 @@
       ],
       "extra_headers": {
         "X-Site-Group": "demo-b"
+      }
+    },
+    {
+      "site_token": "site-demo-ai-studio",
+      "name": "demo-ai-studio",
+      "allowed_origins": [
+        "https://image.usfan.net",
+        "http://127.0.0.1:5173",
+        "http://localhost:5173"
+      ],
+      "allowed_models": [
+        "gemini-2.5-flash",
+        "imagen-3.0-generate-002"
+      ],
+      "default_chat_model": "gemini-2.5-flash",
+      "default_image_model": "imagen-3.0-generate-002",
+      "chat_model_candidates": [
+        "gemini-2.5-flash"
+      ],
+      "image_model_candidates": [
+        "imagen-3.0-generate-002"
+      ],
+      "model_route_overrides": {
+        "gemini-2.5-flash": {
+          "upstream": "ai_studio",
+          "upstream_model": "gemini-2.5-flash"
+        }
+      },
+      "extra_headers": {
+        "X-Site-Group": "demo-ai-studio"
       }
     }
   ]

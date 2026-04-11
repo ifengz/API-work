@@ -69,7 +69,7 @@ class GatewayPolicy:
                 f"model '{model_name}' is not allowed for site '{site.name}'"
             )
 
-        route = self.config.model_routes.get(model_name)
+        route = self._resolve_model_route(site, model_name)
         if route is None:
             raise PolicyError(f"model '{model_name}' has no configured route")
 
@@ -100,7 +100,8 @@ class GatewayPolicy:
         if decision.request_kind != "chat" or input_image_count < 1:
             return decision
 
-        route = self.config.model_routes.get(decision.request_model)
+        site = self.config.get_site(decision.site_token)
+        route = self._resolve_model_route(site, decision.request_model)
         if route is None or route.multimodal_chat_upstream is None:
             return decision
 
@@ -134,3 +135,9 @@ class GatewayPolicy:
         if request_kind == "images":
             return site.image_model_candidates
         return site.chat_model_candidates
+
+    def _resolve_model_route(self, site: SiteConfig, model_name: str):
+        return site.model_route_overrides.get(
+            model_name,
+            self.config.model_routes.get(model_name),
+        )

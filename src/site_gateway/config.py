@@ -42,6 +42,7 @@ class SiteConfig:
     default_image_model: str
     chat_model_candidates: tuple[str, ...]
     image_model_candidates: tuple[str, ...]
+    model_route_overrides: dict[str, ModelRoute] = field(default_factory=dict)
     extra_headers: dict[str, str] = field(default_factory=dict)
 
 
@@ -95,31 +96,14 @@ def load_gateway_config(path: str | Path) -> GatewayConfig:
     }
 
     model_routes = {
-        model_name: ModelRoute(
-            upstream=value["upstream"],
-            upstream_model=value.get("upstream_model", model_name),
-            multimodal_chat_upstream=value.get("multimodal_chat_upstream"),
-            multimodal_chat_upstream_model=value.get(
-                "multimodal_chat_upstream_model"
-            ),
+        model_name: _parse_model_route(
+            model_name,
+            value,
+            upstreams=upstreams,
+            field_name=f"model route '{model_name}'",
         )
         for model_name, value in raw.get("model_routes", {}).items()
     }
-
-    for model_name, route in model_routes.items():
-        if route.upstream not in upstreams:
-            raise ConfigError(
-                f"model route '{model_name}' points to unknown upstream '{route.upstream}'"
-            )
-        if (
-            route.multimodal_chat_upstream is not None
-            and route.multimodal_chat_upstream not in upstreams
-        ):
-            raise ConfigError(
-                "model route "
-                f"'{model_name}' points to unknown multimodal_chat_upstream "
-                f"'{route.multimodal_chat_upstream}'"
-            )
 
     sites: dict[str, SiteConfig] = {}
     for site in sites_raw:
@@ -152,6 +136,11 @@ def load_gateway_config(path: str | Path) -> GatewayConfig:
             site.get("image_model_candidates"),
             f"site '{site_name}' image_model_candidates",
         ) or (default_image_model,)
+        model_route_overrides = _parse_site_model_route_overrides(
+            site.get("model_route_overrides"),
+            f"site '{site_name}' model_route_overrides",
+            upstreams=upstreams,
+        )
 
         if default_chat_model not in allowed_models:
             raise ConfigError(
@@ -161,18 +150,19 @@ def load_gateway_config(path: str | Path) -> GatewayConfig:
             raise ConfigError(
                 f"site '{site_name}' default_image_model must be listed in allowed_models"
             )
+        effective_model_routes = {**model_routes, **model_route_overrides}
         for model_name in allowed_models:
-            if model_name not in model_routes:
+            if model_name not in effective_model_routes:
                 raise ConfigError(
-                    f"site '{site_name}' allowed model '{model_name}' must exist in model_routes"
+                    f"site '{site_name}' allowed model '{model_name}' must exist in model_routes or model_route_overrides"
                 )
-        if default_chat_model not in model_routes:
+        if default_chat_model not in effective_model_routes:
             raise ConfigError(
-                f"site '{site_name}' default_chat_model must exist in model_routes"
+                f"site '{site_name}' default_chat_model must exist in model_routes or model_route_overrides"
             )
-        if default_image_model not in model_routes:
+        if default_image_model not in effective_model_routes:
             raise ConfigError(
-                f"site '{site_name}' default_image_model must exist in model_routes"
+                f"site '{site_name}' default_image_model must exist in model_routes or model_route_overrides"
             )
         if chat_model_candidates[0] != default_chat_model:
             raise ConfigError(
@@ -187,9 +177,9 @@ def load_gateway_config(path: str | Path) -> GatewayConfig:
                 raise ConfigError(
                     f"site '{site_name}' candidate model '{model_name}' must be listed in allowed_models"
                 )
-            if model_name not in model_routes:
+            if model_name not in effective_model_routes:
                 raise ConfigError(
-                    f"site '{site_name}' candidate model '{model_name}' must exist in model_routes"
+                    f"site '{site_name}' candidate model '{model_name}' must exist in model_routes or model_route_overrides"
                 )
 
         sites[site_token] = SiteConfig(
@@ -201,6 +191,7 @@ def load_gateway_config(path: str | Path) -> GatewayConfig:
             default_image_model=default_image_model,
             chat_model_candidates=chat_model_candidates,
             image_model_candidates=image_model_candidates,
+            model_route_overrides=model_route_overrides,
             extra_headers=dict(site.get("extra_headers", {})),
         )
 
@@ -248,6 +239,77 @@ def _require_origin_list(value: object, field_name: str) -> tuple[str, ...]:
         ):
             raise ConfigError(f"invalid {field_name}")
     return origins
+
+
+def _parse_model_route(
+    model_name: str,
+    value: object,
+    *,
+    upstreams: dict[str, UpstreamConfig],
+    field_name: str,
+) -> ModelRoute:
+    if not isinstance(value, dict):
+        raise ConfigError(f"invalid {field_name}")
+
+    route = ModelRoute(
+        upstream=_require_string(value.get("upstream"), f"{field_name} upstream"),
+        upstream_model=_require_string(
+            value.get("upstream_model", model_name),
+            f"{field_name} upstream_model",
+        ),
+        multimodal_chat_upstream=_optional_string(
+            value.get("multimodal_chat_upstream"),
+            f"{field_name} multimodal_chat_upstream",
+        ),
+        multimodal_chat_upstream_model=_optional_string(
+            value.get("multimodal_chat_upstream_model"),
+            f"{field_name} multimodal_chat_upstream_model",
+        ),
+    )
+    if route.upstream not in upstreams:
+        raise ConfigError(
+            f"{field_name} points to unknown upstream '{route.upstream}'"
+        )
+    if (
+        route.multimodal_chat_upstream is not None
+        and route.multimodal_chat_upstream not in upstreams
+    ):
+        raise ConfigError(
+            f"{field_name} points to unknown multimodal_chat_upstream "
+            f"'{route.multimodal_chat_upstream}'"
+        )
+    return route
+
+
+def _parse_site_model_route_overrides(
+    value: object,
+    field_name: str,
+    *,
+    upstreams: dict[str, UpstreamConfig],
+) -> dict[str, ModelRoute]:
+    if value is None:
+        return {}
+    if not isinstance(value, dict):
+        raise ConfigError(f"invalid {field_name}")
+
+    overrides: dict[str, ModelRoute] = {}
+    for model_name, route_value in value.items():
+        parsed_model_name = _require_string(model_name, field_name)
+        overrides[parsed_model_name] = _parse_model_route(
+            parsed_model_name,
+            route_value,
+            upstreams=upstreams,
+            field_name=f"{field_name} '{parsed_model_name}'",
+        )
+    return overrides
+
+
+def _optional_string(value: object, field_name: str) -> str | None:
+    if value is None:
+        return None
+    if isinstance(value, str) and value.strip():
+        return value.strip()
+    raise ConfigError(f"invalid {field_name}")
 
 
 def _optional_string_list(value: object, field_name: str) -> tuple[str, ...] | None:

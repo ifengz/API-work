@@ -3,9 +3,10 @@
 这套骨架现在按这条线落地：
 
 ```text
-site-gateway -> one-api / LiteLLM
+site-gateway -> one-api / LiteLLM / AI Studio
 one-api      -> 主面板 + 统一入口
 LiteLLM      -> Vertex 主执行层
+AI Studio    -> Gemini Developer API key 执行层
 ```
 
 ## 最短落地步骤
@@ -82,6 +83,22 @@ bash /www/wwwroot/API-work/scripts/deploy-production.sh
 | one-api 面板 | `http://api-work.usfan.net:5000` |
 | site-gateway 健康检查 | `http://api-work.usfan.net:8080/healthz` |
 | LiteLLM | `http://api-work.usfan.net:4000` |
+
+## Api-work Key 后端来源
+
+`Api-work Key` 继续是站点级 `site_token`，前端不直接碰真实上游凭证。
+
+后端现在建议支持两类来源：
+
+- `Vertex JSON`：继续通过 `LiteLLM` 承接
+- `AI Studio key`：可直接配置为 `ai_studio` 上游，或后续并入 `LiteLLM`
+
+如果两个站点都暴露同一个公开模型名，但后端来源不同，可以在站点配置里用 `model_route_overrides` 做站点级路由覆盖。这样：
+
+- `site-demo-a` 可以让 `gemini-2.5-flash` 走 `Vertex JSON`
+- `site-demo-ai-studio` 可以让 `gemini-2.5-flash` 走 `AI Studio key`
+
+前端拿到的仍然只是各自的 `Api-work Key`。
 
 ## Vertex 批量导入
 

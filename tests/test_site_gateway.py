@@ -26,6 +26,12 @@ CONFIG_TEMPLATE = {
         "litellm": {
             "base_url": "http://litellm:4000",
             "api_key_env": "LITELLM_MASTER_KEY"
+        },
+        "ai_studio": {
+            "base_url": "https://generativelanguage.googleapis.com/v1beta/openai",
+            "api_key_env": "AI_STUDIO_API_KEY",
+            "chat_path": "/chat/completions",
+            "image_path": "/images/generations"
         }
     },
     "model_routes": {
@@ -68,6 +74,10 @@ CONFIG_TEMPLATE = {
         "qwen-max": {
             "upstream": "one_api",
             "upstream_model": "qwen-max"
+        },
+        "imagen-3.0-generate-002": {
+            "upstream": "ai_studio",
+            "upstream_model": "imagen-3.0-generate-002"
         }
     },
     "sites": [
@@ -142,6 +152,35 @@ CONFIG_TEMPLATE = {
             "extra_headers": {
                 "X-Forwarded-Site": "demo-b"
             }
+        },
+        {
+            "site_token": "site-demo-ai-studio",
+            "name": "demo-ai-studio",
+            "allowed_origins": [
+                "https://image.usfan.net",
+                "http://127.0.0.1:5173"
+            ],
+            "allowed_models": [
+                "gemini-2.5-flash",
+                "imagen-3.0-generate-002"
+            ],
+            "default_chat_model": "gemini-2.5-flash",
+            "default_image_model": "imagen-3.0-generate-002",
+            "chat_model_candidates": [
+                "gemini-2.5-flash"
+            ],
+            "image_model_candidates": [
+                "imagen-3.0-generate-002"
+            ],
+            "model_route_overrides": {
+                "gemini-2.5-flash": {
+                    "upstream": "ai_studio",
+                    "upstream_model": "gemini-2.5-flash"
+                }
+            },
+            "extra_headers": {
+                "X-Forwarded-Site": "demo-ai-studio"
+            }
         }
     ]
 }
@@ -159,6 +198,7 @@ class SiteGatewayTests(unittest.TestCase):
         self.policy = GatewayPolicy(self.config)
         os.environ["ONE_API_MASTER_TOKEN"] = "one-api-secret"
         os.environ["LITELLM_MASTER_KEY"] = "litellm-secret"
+        os.environ["AI_STUDIO_API_KEY"] = "ai-studio-secret"
 
     def tearDown(self) -> None:
         self.temp_dir.cleanup()
@@ -166,6 +206,16 @@ class SiteGatewayTests(unittest.TestCase):
     def test_explicit_route_is_used_for_litellm_model(self) -> None:
         decision = self.policy.resolve("site-demo-a", "gemini-2.5-flash", "chat")
         self.assertEqual(decision.upstream_name, "litellm")
+
+    def test_site_can_override_chat_model_route_to_ai_studio(self) -> None:
+        decision = self.policy.resolve("site-demo-ai-studio", "gemini-2.5-flash", "chat")
+
+        self.assertEqual(decision.upstream_name, "ai_studio")
+        self.assertEqual(
+            decision.upstream_url,
+            "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
+        )
+        self.assertEqual(decision.upstream_model, "gemini-2.5-flash")
 
     def test_default_model_used_when_request_model_missing(self) -> None:
         decision = self.policy.resolve("site-demo-a", None, "chat")
@@ -193,6 +243,12 @@ class SiteGatewayTests(unittest.TestCase):
         decision = self.policy.resolve("site-demo-a", None, "images")
         self.assertEqual(decision.request_model, "gemini-3-pro-image-preview")
         self.assertEqual(decision.upstream_name, "litellm")
+
+    def test_site_can_use_ai_studio_default_image_model(self) -> None:
+        decision = self.policy.resolve("site-demo-ai-studio", None, "images")
+
+        self.assertEqual(decision.request_model, "imagen-3.0-generate-002")
+        self.assertEqual(decision.upstream_name, "ai_studio")
 
     def test_demo_b_default_image_model_is_allowed(self) -> None:
         decision = self.policy.resolve("site-demo-b", None, "images")
@@ -245,6 +301,24 @@ class SiteGatewayTests(unittest.TestCase):
             headers["X-Client-Trace-Id"],
             "018f2f4e-5d1d-7c6a-b4fa-9d6c44f3a7ad",
         )
+
+    def test_ai_studio_request_uses_ai_studio_key_env(self) -> None:
+        decision = self.policy.resolve("site-demo-ai-studio", "gemini-2.5-flash", "chat")
+        url, headers, body = build_upstream_request(
+            decision,
+            {
+                "messages": [{"role": "user", "content": "hi"}],
+            },
+            trace_id="018f2f4e-5d1d-7c6a-b4fa-9d6c44f3a7ad",
+        )
+        payload = json.loads(body.decode("utf-8"))
+
+        self.assertEqual(
+            url,
+            "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
+        )
+        self.assertEqual(headers["Authorization"], "Bearer ai-studio-secret")
+        self.assertEqual(payload["model"], "gemini-2.5-flash")
 
     def test_gemini_multimodal_chat_strips_image_url_detail_before_forward(self) -> None:
         decision = self.policy.resolve("site-demo-a", "gemini-2.5-flash", "chat")
