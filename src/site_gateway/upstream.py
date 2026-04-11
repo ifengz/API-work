@@ -52,6 +52,8 @@ def _normalize_payload(
     payload: Mapping[str, object],
 ) -> dict[str, Any]:
     forwarded_payload = deepcopy(dict(payload))
+    if _should_default_ai_studio_image_response_format(decision, forwarded_payload):
+        forwarded_payload["response_format"] = "b64_json"
     if _should_strip_image_detail(decision, forwarded_payload):
         forwarded_payload["messages"] = _strip_image_url_detail(
             forwarded_payload.get("messages")
@@ -68,6 +70,17 @@ def _should_strip_image_detail(
         and decision.request_kind == "chat"
         and decision.upstream_model.startswith("gemini")
         and _count_chat_image_parts(payload.get("messages")) > 0
+    )
+
+
+def _should_default_ai_studio_image_response_format(
+    decision: RoutingDecision,
+    payload: Mapping[str, object],
+) -> bool:
+    return (
+        decision.upstream_name == "ai_studio"
+        and decision.request_kind == "images"
+        and "response_format" not in payload
     )
 
 

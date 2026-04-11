@@ -158,24 +158,30 @@ CONFIG_TEMPLATE = {
             "name": "demo-ai-studio",
             "allowed_origins": [
                 "https://image.usfan.net",
-                "http://127.0.0.1:5173"
+                "http://127.0.0.1:5173",
+                "http://127.0.0.1:4173",
+                "http://localhost:4173"
             ],
             "allowed_models": [
                 "gemini-2.5-flash",
-                "imagen-3.0-generate-002"
+                "gemini-2.5-flash-image"
             ],
             "default_chat_model": "gemini-2.5-flash",
-            "default_image_model": "imagen-3.0-generate-002",
+            "default_image_model": "gemini-2.5-flash-image",
             "chat_model_candidates": [
                 "gemini-2.5-flash"
             ],
             "image_model_candidates": [
-                "imagen-3.0-generate-002"
+                "gemini-2.5-flash-image"
             ],
             "model_route_overrides": {
                 "gemini-2.5-flash": {
                     "upstream": "ai_studio",
                     "upstream_model": "gemini-2.5-flash"
+                },
+                "gemini-2.5-flash-image": {
+                    "upstream": "ai_studio",
+                    "upstream_model": "gemini-2.5-flash-image"
                 }
             },
             "extra_headers": {
@@ -247,7 +253,7 @@ class SiteGatewayTests(unittest.TestCase):
     def test_site_can_use_ai_studio_default_image_model(self) -> None:
         decision = self.policy.resolve("site-demo-ai-studio", None, "images")
 
-        self.assertEqual(decision.request_model, "imagen-3.0-generate-002")
+        self.assertEqual(decision.request_model, "gemini-2.5-flash-image")
         self.assertEqual(decision.upstream_name, "ai_studio")
 
     def test_demo_b_default_image_model_is_allowed(self) -> None:
@@ -319,6 +325,42 @@ class SiteGatewayTests(unittest.TestCase):
         )
         self.assertEqual(headers["Authorization"], "Bearer ai-studio-secret")
         self.assertEqual(payload["model"], "gemini-2.5-flash")
+
+    def test_explicit_local_dev_origin_is_allowed(self) -> None:
+        self.assertTrue(
+            self.config.site_allows_origin("site-demo-ai-studio", "http://127.0.0.1:4173")
+        )
+        self.assertTrue(
+            self.config.site_allows_origin("site-demo-ai-studio", "http://localhost:4173")
+        )
+
+    def test_ai_studio_image_request_defaults_response_format_b64_json(self) -> None:
+        decision = self.policy.resolve("site-demo-ai-studio", None, "images")
+        _, _, body = build_upstream_request(
+            decision,
+            {
+                "prompt": "A tiny red cube on a white table",
+            },
+            trace_id="018f2f4e-5d1d-7c6a-b4fa-9d6c44f3a7ad",
+        )
+        payload = json.loads(body.decode("utf-8"))
+
+        self.assertEqual(payload["model"], "gemini-2.5-flash-image")
+        self.assertEqual(payload["response_format"], "b64_json")
+
+    def test_ai_studio_image_request_preserves_explicit_response_format(self) -> None:
+        decision = self.policy.resolve("site-demo-ai-studio", None, "images")
+        _, _, body = build_upstream_request(
+            decision,
+            {
+                "prompt": "A tiny red cube on a white table",
+                "response_format": "url",
+            },
+            trace_id="018f2f4e-5d1d-7c6a-b4fa-9d6c44f3a7ad",
+        )
+        payload = json.loads(body.decode("utf-8"))
+
+        self.assertEqual(payload["response_format"], "url")
 
     def test_controlled_wildcard_origin_matches_subdomain_only(self) -> None:
         wildcard = json.loads(json.dumps(CONFIG_TEMPLATE))

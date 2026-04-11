@@ -97,7 +97,9 @@
       "allowed_origins": [
         "https://*.usfan.net",
         "http://127.0.0.1:5173",
-        "http://localhost:5173"
+        "http://localhost:5173",
+        "http://127.0.0.1:4173",
+        "http://localhost:4173"
       ],
       "allowed_models": [
         "gemini-3-flash-preview",
@@ -136,7 +138,9 @@
       "allowed_origins": [
         "https://*.usfan.net",
         "http://127.0.0.1:5173",
-        "http://localhost:5173"
+        "http://localhost:5173",
+        "http://127.0.0.1:4173",
+        "http://localhost:4173"
       ],
       "allowed_models": [
         "gemini-3-flash-preview",
@@ -175,24 +179,30 @@
       "allowed_origins": [
         "https://*.usfan.net",
         "http://127.0.0.1:5173",
-        "http://localhost:5173"
+        "http://localhost:5173",
+        "http://127.0.0.1:4173",
+        "http://localhost:4173"
       ],
       "allowed_models": [
         "gemini-2.5-flash",
-        "imagen-3.0-generate-002"
+        "gemini-2.5-flash-image"
       ],
       "default_chat_model": "gemini-2.5-flash",
-      "default_image_model": "imagen-3.0-generate-002",
+      "default_image_model": "gemini-2.5-flash-image",
       "chat_model_candidates": [
         "gemini-2.5-flash"
       ],
       "image_model_candidates": [
-        "imagen-3.0-generate-002"
+        "gemini-2.5-flash-image"
       ],
       "model_route_overrides": {
         "gemini-2.5-flash": {
           "upstream": "ai_studio",
           "upstream_model": "gemini-2.5-flash"
+        },
+        "gemini-2.5-flash-image": {
+          "upstream": "ai_studio",
+          "upstream_model": "gemini-2.5-flash-image"
         }
       },
       "extra_headers": {
