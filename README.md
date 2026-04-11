@@ -100,6 +100,8 @@ bash /www/wwwroot/API-work/scripts/deploy-production.sh
 
 前端拿到的仍然只是各自的 `Api-work Key`。
 
+`allowed_origins` 除了精确 origin，也支持受控后缀，例如 `https://*.usfan.net`。这里仍然不是全开 CORS，网关会继续校验真实请求 `Origin`，并只回显具体来源，不返回裸 `*`。
+
 ## Vertex 批量导入
 
 如果你决定把 `Vertex` 主执行放回 `LiteLLM`，这套项目现在推荐直接用 `vertex/` 目录生成池配置，不再走 `One-API` 面板逐条建 `VertexAI` 渠道。

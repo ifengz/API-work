@@ -320,6 +320,33 @@ class SiteGatewayTests(unittest.TestCase):
         self.assertEqual(headers["Authorization"], "Bearer ai-studio-secret")
         self.assertEqual(payload["model"], "gemini-2.5-flash")
 
+    def test_controlled_wildcard_origin_matches_subdomain_only(self) -> None:
+        wildcard = json.loads(json.dumps(CONFIG_TEMPLATE))
+        wildcard["sites"][0]["allowed_origins"] = [
+            "https://*.usfan.net",
+            "http://127.0.0.1:5173",
+        ]
+        self.config_path.write_text(
+            json.dumps(wildcard, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+
+        config = load_gateway_config(self.config_path)
+
+        self.assertTrue(config.site_allows_origin("site-demo-a", "https://image.usfan.net"))
+        self.assertTrue(config.site_allows_origin("site-demo-a", "https://preview.image.usfan.net"))
+        self.assertFalse(config.site_allows_origin("site-demo-a", "https://usfan.net"))
+        self.assertFalse(config.site_allows_origin("site-demo-a", "https://evilusfan.net"))
+        self.assertFalse(config.site_allows_origin("site-demo-a", "http://image.usfan.net"))
+
+    def test_invalid_wildcard_origin_pattern_is_rejected(self) -> None:
+        invalid = json.loads(json.dumps(CONFIG_TEMPLATE))
+        invalid["sites"][0]["allowed_origins"] = ["https://image.*.usfan.net"]
+        self.config_path.write_text(json.dumps(invalid), encoding="utf-8")
+
+        with self.assertRaises(ConfigError):
+            load_gateway_config(self.config_path)
+
     def test_gemini_multimodal_chat_strips_image_url_detail_before_forward(self) -> None:
         decision = self.policy.resolve("site-demo-a", "gemini-2.5-flash", "chat")
         url, headers, body = build_upstream_request(

@@ -166,6 +166,31 @@ class SiteGatewayContractTests(unittest.TestCase):
         )
         self.assertIn("Origin", handler.sent_headers["Vary"])
 
+    def test_preflight_allows_controlled_wildcard_origin(self) -> None:
+        wildcard = json.loads(json.dumps(CONFIG_TEMPLATE))
+        wildcard["sites"][0]["allowed_origins"] = ["https://*.usfan.net"]
+        self.config_path.write_text(
+            json.dumps(wildcard, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        handler = self._build_handler(
+            "OPTIONS",
+            "/v1/chat/completions",
+            headers={
+                "Origin": "https://studio.image.usfan.net",
+                "Access-Control-Request-Method": "POST",
+                "Access-Control-Request-Headers": "authorization,content-type",
+            },
+        )
+
+        getattr(handler, "do_OPTIONS")()
+
+        self.assertEqual(handler.sent_status, 204)
+        self.assertEqual(
+            handler.sent_headers["Access-Control-Allow-Origin"],
+            "https://studio.image.usfan.net",
+        )
+
     def test_preflight_rejects_unknown_origin(self) -> None:
         handler = self._build_handler(
             "OPTIONS",
@@ -201,6 +226,42 @@ class SiteGatewayContractTests(unittest.TestCase):
         self.assertEqual(handler.sent_status, 403)
         self.assertEqual(payload["error"]["code"], "ORIGIN_NOT_ALLOWED")
         self.assertEqual(payload["error"]["trace_id"], VALID_TRACE_ID)
+
+    @patch("site_gateway.server.forward_request")
+    def test_public_post_allows_origin_matched_by_controlled_wildcard(
+        self,
+        mocked_forward_request,
+    ) -> None:
+        wildcard = json.loads(json.dumps(CONFIG_TEMPLATE))
+        wildcard["sites"][0]["allowed_origins"] = ["https://*.usfan.net"]
+        self.config_path.write_text(
+            json.dumps(wildcard, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        mocked_forward_request.return_value = UpstreamResponse(
+            status_code=200,
+            headers={"Content-Type": "application/json"},
+            body=json.dumps({"choices": []}).encode("utf-8"),
+        )
+        handler = self._build_handler(
+            "POST",
+            "/v1/chat/completions",
+            body=json.dumps({"messages": [{"role": "user", "content": "hi"}]}),
+            headers={
+                "Origin": "https://studio.image.usfan.net",
+                "Content-Type": "application/json",
+                "Authorization": "Bearer site-demo-a",
+                "X-Client-Trace-Id": VALID_TRACE_ID,
+            },
+        )
+
+        handler.do_POST()
+
+        self.assertEqual(handler.sent_status, 200)
+        self.assertEqual(
+            handler.sent_headers["Access-Control-Allow-Origin"],
+            "https://studio.image.usfan.net",
+        )
 
     def test_public_post_rejects_x_site_token_header(self) -> None:
         handler = self._build_handler(

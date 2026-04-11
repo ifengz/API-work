@@ -67,10 +67,10 @@ class GatewayConfig:
             raise ConfigError(f"unknown upstream: {upstream_name}") from exc
 
     def is_allowed_origin(self, origin: str) -> bool:
-        return any(origin in site.allowed_origins for site in self.sites.values())
+        return any(_site_allows_origin(site, origin) for site in self.sites.values())
 
     def site_allows_origin(self, site_token: str, origin: str) -> bool:
-        return origin in self.get_site(site_token).allowed_origins
+        return _site_allows_origin(self.get_site(site_token), origin)
 
 
 def load_gateway_config(path: str | Path) -> GatewayConfig:
@@ -225,20 +225,66 @@ def _require_string_list(value: object, field_name: str) -> tuple[str, ...]:
 def _require_origin_list(value: object, field_name: str) -> tuple[str, ...]:
     origins = _require_string_list(value, field_name)
     for origin in origins:
-        parsed = urlparse(origin)
-        if (
-            origin == "null"
-            or "*" in origin
-            or parsed.scheme not in {"http", "https"}
-            or not parsed.netloc
-            or parsed.path not in {"", "/"}
-            or parsed.params
-            or parsed.query
-            or parsed.fragment
-            or origin.endswith("/")
-        ):
-            raise ConfigError(f"invalid {field_name}")
+        _normalize_origin(origin, field_name=field_name, allow_wildcard=True)
     return origins
+
+
+def _site_allows_origin(site: SiteConfig, origin: str) -> bool:
+    return any(
+        _origin_matches(allowed_origin, origin) for allowed_origin in site.allowed_origins
+    )
+
+
+def _origin_matches(allowed_origin: str, request_origin: str) -> bool:
+    try:
+        allowed_scheme, allowed_host, allowed_port = _normalize_origin(
+            allowed_origin,
+            allow_wildcard=True,
+        )
+        request_scheme, request_host, request_port = _normalize_origin(request_origin)
+    except ValueError:
+        return False
+
+    if allowed_scheme != request_scheme or allowed_port != request_port:
+        return False
+    if allowed_host.startswith("*."):
+        suffix = allowed_host[1:]
+        return request_host.endswith(suffix) and request_host != allowed_host[2:]
+    return allowed_host == request_host
+
+
+def _normalize_origin(
+    origin: str,
+    *,
+    field_name: str | None = None,
+    allow_wildcard: bool = False,
+) -> tuple[str, str, int | None]:
+    parsed = urlparse(origin)
+    hostname = (parsed.hostname or "").lower()
+    has_wildcard = "*" in origin
+    invalid = (
+        origin == "null"
+        or parsed.scheme not in {"http", "https"}
+        or not parsed.netloc
+        or not hostname
+        or parsed.path not in {"", "/"}
+        or parsed.params
+        or parsed.query
+        or parsed.fragment
+        or origin.endswith("/")
+        or (has_wildcard and not _is_supported_wildcard_host(hostname))
+        or (has_wildcard and not allow_wildcard)
+        or ("*" in hostname and not has_wildcard)
+    )
+    if invalid:
+        if field_name:
+            raise ConfigError(f"invalid {field_name}")
+        raise ValueError("invalid origin")
+    return parsed.scheme, hostname, parsed.port
+
+
+def _is_supported_wildcard_host(hostname: str) -> bool:
+    return hostname.startswith("*.") and hostname.count("*") == 1 and "." in hostname[2:]
 
 
 def _parse_model_route(

@@ -95,7 +95,7 @@
       "site_token": "site-demo-a",
       "name": "demo-a",
       "allowed_origins": [
-        "https://image.usfan.net",
+        "https://*.usfan.net",
         "http://127.0.0.1:5173",
         "http://localhost:5173"
       ],
@@ -134,7 +134,7 @@
       "site_token": "site-demo-b",
       "name": "demo-b",
       "allowed_origins": [
-        "https://image.usfan.net",
+        "https://*.usfan.net",
         "http://127.0.0.1:5173",
         "http://localhost:5173"
       ],
@@ -173,7 +173,7 @@
       "site_token": "site-demo-ai-studio",
       "name": "demo-ai-studio",
       "allowed_origins": [
-        "https://image.usfan.net",
+        "https://*.usfan.net",
         "http://127.0.0.1:5173",
         "http://localhost:5173"
       ],
